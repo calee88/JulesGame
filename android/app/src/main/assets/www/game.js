@@ -1,5 +1,5 @@
 const config = {
-    type: Phaser.AUTO,
+    type: Phaser.CANVAS, // Force Canvas to avoid WebGL stalls
     scale: {
         mode: Phaser.Scale.RESIZE,
         parent: 'game-container',
@@ -36,6 +36,7 @@ let gameSpeed = 5;
 let zoneAttack, zoneDodge, zoneSwipe;
 let graphics;
 let width, height;
+let spawnTimer = 0; // Custom timer for spawning
 
 // Mode Management
 const MODES = ['PISTOL', 'SHIELD', 'SWORD']; // Extended for future
@@ -77,14 +78,6 @@ function create() {
     // --- UI ---
     scoreText = this.add.text(20, 20, 'Score: 0', { fontSize: '32px', fill: '#fff' });
     modeText = this.add.text(width / 2, 50, 'MODE: PISTOL', { fontSize: '24px', fill: '#00ff00' }).setOrigin(0.5);
-
-    // --- Game Loop Timer for Spawning Enemies ---
-    this.time.addEvent({
-        delay: 1500,
-        callback: spawnEnemy,
-        callbackScope: this,
-        loop: true
-    });
 
     // --- Collision Physics ---
     this.physics.add.overlap(bullets, enemies, bulletHitEnemy, null, this);
@@ -188,9 +181,16 @@ function flashZone(scene, y, h, color) {
     });
 }
 
-function update() {
+function update(time, delta) {
     // Move grid to simulate running
     this.grid.tilePositionX += gameSpeed;
+
+    // --- Custom Spawn Timer ---
+    spawnTimer += delta;
+    if (spawnTimer > 1500) {
+        spawnEnemy(this);
+        spawnTimer = 0;
+    }
 
     // Remove bullets that go off screen
     bullets.children.each(function(b) {
@@ -235,15 +235,15 @@ function performDodge(scene) {
     });
 }
 
-function spawnEnemy() {
+function spawnEnemy(scene) {
     let yPos = Phaser.Math.Between(50, height * 0.5); // Spawn in the top half (gameplay area)
 
     // Keep enemy spawn within reasonable gameplay bounds (not too low, into buttons)
     // Gameplay area is technically top 50%, but let's give it some padding.
     yPos = Phaser.Math.Clamp(yPos, 50, (height * 0.5) - 50);
 
-    let enemy = this.add.rectangle(width + 50, yPos, 40, 40, 0xff0000);
-    this.physics.add.existing(enemy);
+    let enemy = scene.add.rectangle(width + 50, yPos, 40, 40, 0xff0000);
+    scene.physics.add.existing(enemy);
     enemy.body.setVelocityX(-200 - (score * 5)); // Get faster as score increases
     enemies.add(enemy);
 }

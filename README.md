@@ -25,3 +25,12 @@ This is a Phaser 3 game wrapped in a standard Android Studio project structure.
 *   `android/app/src/main/assets/www/`: The web source code (HTML/JS/Phaser).
     *   `game.js`: Main game logic.
     *   `index.html`: Entry point.
+*   `docs/`: Static web build for GitHub Pages (copy of the www assets).
+
+## How to Deploy to GitHub Pages
+1.  Push this repository to GitHub.
+2.  Go to **Settings** > **Pages**.
+3.  Under **Source**, select **Deploy from a branch**.
+4.  Under **Branch**, select `main` (or your current branch) and the `/docs` folder.
+5.  Click **Save**.
+6.  Your game will be available at `https://<your-username>.github.io/<repo-name>/`.

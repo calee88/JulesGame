@@ -1,5 +1,281 @@
+// Ported from: https://github.com/ourcade/infinite-runner-template-phaser3/blob/master/src/scenes/Game.ts
+// Adapted for Vanilla JS + Programmatic Assets
+
+class GameScene extends Phaser.Scene {
+    constructor() {
+        super('game-scene');
+
+        // State
+        this.score = 0;
+        this.scoreLabel = null;
+        this.player = null;
+        this.cursors = null;
+
+        // Groups
+        this.enemies = null;
+        this.bullets = null;
+
+        // World Constants
+        this.gameSpeed = 5; // not used directly if we use velocity
+        this.spawnTimer = 0;
+        this.lastFired = 0;
+
+        // Mode
+        this.modes = ['PISTOL', 'SHIELD', 'SWORD'];
+        this.currentModeIndex = 0;
+        this.modeText = null;
+
+        // One-handed controls
+        this.zoneAttack = null;
+        this.zoneDodge = null;
+        this.zoneSwipe = null;
+        this.isDodging = false;
+    }
+
+    preload() {
+        // --- Generate Assets Programmatically (No external files needed) ---
+
+        // 1. Background (Tile)
+        let bg = this.make.graphics({ x: 0, y: 0, add: false });
+        bg.fillStyle(0x1a1a2e);
+        bg.fillRect(0, 0, 64, 64); // Dark Blue Tile
+        bg.lineStyle(1, 0x0f3460, 0.5);
+        bg.strokeRect(0, 0, 64, 64); // Grid line
+        bg.generateTexture('background', 64, 64);
+
+        // 2. Player
+        let p = this.make.graphics({ x: 0, y: 0, add: false });
+        p.fillStyle(0x00d4ff); // Cyan
+        p.fillRect(0, 0, 32, 32);
+        p.generateTexture('player', 32, 32);
+
+        // 3. Enemy
+        let e = this.make.graphics({ x: 0, y: 0, add: false });
+        e.fillStyle(0xff0000); // Red
+        e.fillRect(0, 0, 32, 32);
+        e.generateTexture('enemy', 32, 32);
+
+        // 4. Bullet
+        let b = this.make.graphics({ x: 0, y: 0, add: false });
+        b.fillStyle(0xffff00); // Yellow
+        b.fillRect(0, 0, 16, 8);
+        b.generateTexture('bullet', 16, 8);
+    }
+
+    create() {
+        const width = this.scale.width;
+        const height = this.scale.height;
+
+        // 1. Background (Scrolling TileSprite)
+        // We make it huge so it covers the initial area, but we'll scroll it manually or stick it to camera
+        this.background = this.add.tileSprite(0, 0, width, height, 'background')
+            .setOrigin(0)
+            .setScrollFactor(0); // Fix to camera
+
+        // 2. Player (Moving Right)
+        this.player = this.physics.add.sprite(width * 0.2, height / 2, 'player');
+        this.player.setCollideWorldBounds(false); // Let it run forever
+        this.player.setVelocityX(200); // CONSTANT FORWARD SPEED
+
+        // 3. Camera (Follow Player)
+        this.cameras.main.startFollow(this.player, true, 0.1, 0.1, -width * 0.3, 0); // Offset to keep player on left
+        // No Bounds! Infinite world.
+
+        // 4. Object Groups
+        this.enemies = this.physics.add.group();
+        this.bullets = this.physics.add.group();
+
+        // 5. UI (Fixed to Camera)
+        this.scoreLabel = this.add.text(10, 10, 'Score: 0', { fontSize: '24px', fill: '#fff' })
+            .setScrollFactor(0);
+        this.modeText = this.add.text(width / 2, 50, 'MODE: PISTOL', { fontSize: '24px', fill: '#00ff00' })
+            .setOrigin(0.5)
+            .setScrollFactor(0);
+
+        // 6. Controls (Zones)
+        this.createInputZones(width, height);
+
+        // 7. Collisions
+        this.physics.add.overlap(this.bullets, this.enemies, this.handleBulletHitEnemy, null, this);
+        this.physics.add.overlap(this.player, this.enemies, this.handleEnemyHitPlayer, null, this);
+
+        // Handle resize
+        this.scale.on('resize', this.resize, this);
+    }
+
+    update(time, delta) {
+        // --- 1. Scroll Background ---
+        // Since background is ScrollFactor 0, it stays on screen.
+        // We animate its tilePosition to match camera movement.
+        this.background.tilePositionX = this.cameras.main.scrollX;
+
+        // --- 2. Spawn Enemies ---
+        // Logic: Spawn ahead of the camera view
+        this.spawnTimer += delta;
+        if (this.spawnTimer > 1500) {
+            this.spawnEnemy();
+            this.spawnTimer = 0;
+        }
+
+        // --- 3. Cleanup ---
+        // Destroy bullets that flew too far (relative to player)
+        const killLine = this.cameras.main.scrollX + this.scale.width + 100;
+        const trailLine = this.cameras.main.scrollX - 100;
+
+        this.bullets.children.each(b => {
+            if (b.active && b.x > killLine) b.destroy();
+        });
+
+        // Destroy enemies that player passed
+        this.enemies.children.each(e => {
+            if (e.active && e.x < trailLine) e.destroy();
+        });
+
+        // --- 4. Infinite Teleport (Floating Point Precision Guard) ---
+        // If we go too far, teleport back?
+        // For a simple prototype, Number.MAX_SAFE_INTEGER is huge, so 200px/s will run for millions of years.
+        // We don't strictly need to wrap the world unless physics gets jittery.
+        // The original tutorial wrapped because it reused static assets (houses).
+        // Since we spawn new enemies, we can just keep going.
+    }
+
+    spawnEnemy() {
+        const cam = this.cameras.main;
+        const spawnX = cam.scrollX + cam.width + 100; // Just off-screen right
+        const spawnY = Phaser.Math.Between(100, cam.height - 100);
+
+        // Enemy (Stationary or Moving Left?)
+        // If Player moves Right at 200, and Enemy is Stationary, relative speed is 200.
+        // If Enemy moves Left at 200, relative speed is 400.
+        // Let's make them move Left slightly to be aggressive.
+
+        let enemy = this.enemies.create(spawnX, spawnY, 'enemy');
+        enemy.setVelocityX(-100);
+    }
+
+    fireBullet() {
+        if (!this.player.active) return;
+
+        const now = this.time.now;
+        if (now - this.lastFired < 300) return;
+        this.lastFired = now;
+
+        // Spawn bullet at player position
+        let b = this.bullets.create(this.player.x + 20, this.player.y, 'bullet');
+        // Bullet must move faster than player!
+        // Player = 200. Bullet = 600.
+        b.setVelocityX(600);
+    }
+
+    performDodge() {
+        if (this.isDodging) return;
+        this.isDodging = true;
+        this.player.alpha = 0.5;
+
+        // Simple timer for dodge duration
+        this.time.delayedCall(500, () => {
+            this.isDodging = false;
+            this.player.alpha = 1;
+        });
+    }
+
+    handleBulletHitEnemy(bullet, enemy) {
+        bullet.destroy();
+        enemy.destroy();
+        this.score += 10;
+        this.scoreLabel.setText('Score: ' + this.score);
+    }
+
+    handleEnemyHitPlayer(player, enemy) {
+        if (this.isDodging) return;
+
+        // Game Over
+        this.physics.pause();
+        player.setTint(0x555555);
+        this.scoreLabel.setText('GAME OVER\nTap to Restart');
+        this.scoreLabel.setX(this.cameras.main.scrollX + this.scale.width/2 - 100); // Center relative to cam
+        this.scoreLabel.setY(this.scale.height/2);
+
+        this.input.once('pointerdown', () => {
+            this.scene.restart();
+        });
+    }
+
+    createInputZones(width, height) {
+        // We use scrollFactor(0) for Zones so they stick to the screen!
+        let zoneHeight = height * 0.25;
+
+        // Attack (Bottom Upper)
+        this.zoneAttack = this.add.zone(width/2, height * 0.625, width, zoneHeight)
+            .setOrigin(0.5)
+            .setScrollFactor(0)
+            .setInteractive();
+
+        this.zoneAttack.on('pointerdown', () => {
+            this.fireBullet();
+            this.flashZone(height * 0.5, zoneHeight, 0xff0000);
+        });
+
+        // Dodge (Bottom Lower)
+        this.zoneDodge = this.add.zone(width/2, height * 0.875, width, zoneHeight)
+            .setOrigin(0.5)
+            .setScrollFactor(0)
+            .setInteractive();
+
+        this.zoneDodge.on('pointerdown', () => {
+            this.performDodge();
+            this.flashZone(height * 0.75, zoneHeight, 0x00ff00);
+        });
+
+        // Mode Switch (Top Half) - Swipe logic
+        this.zoneSwipe = this.add.zone(width/2, height * 0.25, width, height * 0.5)
+            .setOrigin(0.5)
+            .setScrollFactor(0)
+            .setInteractive();
+
+        let startY = 0;
+        this.zoneSwipe.on('pointerdown', (p) => startY = p.y);
+        this.zoneSwipe.on('pointerup', (p) => {
+            if (Math.abs(p.y - startY) > 50) {
+                this.changeMode(p.y > startY ? -1 : 1);
+            }
+        });
+    }
+
+    flashZone(y, h, color) {
+        let r = this.add.rectangle(this.scale.width/2, y + h/2, this.scale.width, h, color, 0.3)
+            .setScrollFactor(0);
+        this.tweens.add({
+            targets: r,
+            alpha: 0,
+            duration: 200,
+            onComplete: () => r.destroy()
+        });
+    }
+
+    changeMode(dir) {
+        this.currentModeIndex = (this.currentModeIndex + dir + this.modes.length) % this.modes.length;
+        this.modeText.setText('MODE: ' + this.modes[this.currentModeIndex]);
+        this.tweens.add({ targets: this.modeText, scale: 1.5, duration: 100, yoyo: true });
+    }
+
+    resize(gameSize) {
+        const width = gameSize.width;
+        const height = gameSize.height;
+        this.cameras.main.setViewport(0, 0, width, height);
+        // Re-position UI elements?
+        // For prototype, simple reload is safer, but let's just update zones
+        if (this.zoneAttack) {
+            this.zoneAttack.setSize(width, height * 0.25).setPosition(width/2, height * 0.625);
+            this.zoneDodge.setSize(width, height * 0.25).setPosition(width/2, height * 0.875);
+            this.zoneSwipe.setSize(width, height * 0.5).setPosition(width/2, height * 0.25);
+        }
+        if (this.background) this.background.setSize(width, height);
+    }
+}
+
 const config = {
-    type: Phaser.CANVAS, // Force Canvas to avoid WebGL stalls
+    type: Phaser.CANVAS, // Canvas for stability
     scale: {
         mode: Phaser.Scale.RESIZE,
         parent: 'game-container',
@@ -14,292 +290,7 @@ const config = {
         }
     },
     backgroundColor: '#1a1a2e',
-    scene: {
-        preload: preload,
-        create: create,
-        update: update,
-        resize: resize
-    }
+    scene: GameScene
 };
 
 const game = new Phaser.Game(config);
-
-let player;
-let cursors;
-let bullets;
-let enemies;
-let lastFired = 0;
-let score = 0;
-let scoreText;
-let isDodging = false;
-let gameSpeed = 5;
-let zoneAttack, zoneDodge, zoneSwipe;
-let graphics;
-let width, height;
-let spawnTimer = 0; // Custom timer for spawning
-
-// Mode Management
-const MODES = ['PISTOL', 'SHIELD', 'SWORD']; // Extended for future
-let currentModeIndex = 0; // 0: Pistol
-let modeText;
-
-function preload() {
-    // We are using simple graphics, so no assets to preload yet.
-    // In a real build, we would load images here.
-}
-
-function create() {
-    width = this.scale.width;
-    height = this.scale.height;
-
-    // --- Background Grid Effect ---
-    // A simple grid to show movement
-    this.grid = this.add.grid(width / 2, height / 2, width, height, 50, 50, 0x1a1a2e, 1, 0x0f3460, 0.5);
-
-    // --- Player Setup ---
-    // A simple blue square for the player
-    player = this.add.rectangle(100, height / 2, 50, 50, 0x00d4ff);
-    this.physics.add.existing(player);
-    player.body.setCollideWorldBounds(true);
-    player.body.setImmovable(true);
-
-    // --- Groups ---
-    bullets = this.physics.add.group({
-        classType: Phaser.GameObjects.Rectangle,
-        maxSize: 30,
-        runChildUpdate: true
-    });
-
-    enemies = this.physics.add.group();
-
-    // --- Inputs (The Invisible Zones) ---
-    createInputZones(this);
-
-    // --- UI ---
-    scoreText = this.add.text(20, 20, 'Score: 0', { fontSize: '32px', fill: '#fff' });
-    modeText = this.add.text(width / 2, 50, 'MODE: PISTOL', { fontSize: '24px', fill: '#00ff00' }).setOrigin(0.5);
-
-    // --- Collision Physics ---
-    this.physics.add.overlap(bullets, enemies, bulletHitEnemy, null, this);
-    this.physics.add.overlap(player, enemies, enemyHitPlayer, null, this);
-
-    // Handle resize
-    this.scale.on('resize', resize, this);
-}
-
-function createInputZones(scene) {
-    // Zone A: Top 50% (Swipe Area) - For now, we just track clicks here for testing
-    // Zone B: Button 1 (Attack) - Top of bottom half (50% -> 75%)
-    // Zone C: Button 2 (Dodge) - Bottom (75% -> 100%)
-
-    let zoneHeight = height * 0.25; // 1/4 of screen
-
-    // Visual indicators (optional, for debugging/feedback)
-    graphics = scene.add.graphics();
-    drawZoneLines(scene);
-
-    // Attack Zone (Button 1)
-    // Area: y from 50% to 75%
-    zoneAttack = scene.add.zone(width/2, height * 0.625, width, zoneHeight).setOrigin(0.5).setInteractive();
-    zoneAttack.on('pointerdown', () => {
-        fireBullet(scene);
-        flashZone(scene, height * 0.5, zoneHeight, 0xff0000);
-    });
-
-    // Dodge Zone (Button 2)
-    // Area: y from 75% to 100%
-    zoneDodge = scene.add.zone(width/2, height * 0.875, width, zoneHeight).setOrigin(0.5).setInteractive();
-    zoneDodge.on('pointerdown', () => {
-        performDodge(scene);
-        flashZone(scene, height * 0.75, zoneHeight, 0x00ff00);
-    });
-
-    // Top Area (Swipe/Misc)
-    // Area: y from 0 to 50%
-    zoneSwipe = scene.add.zone(width/2, height * 0.25, width, height * 0.5).setOrigin(0.5).setInteractive();
-
-    // Swipe Detection
-    let startY = 0;
-    zoneSwipe.on('pointerdown', (pointer) => {
-        startY = pointer.y;
-    });
-
-    zoneSwipe.on('pointerup', (pointer) => {
-        let endY = pointer.y;
-        let diff = endY - startY;
-
-        if (Math.abs(diff) > 50) { // Minimum swipe distance
-            if (diff > 0) {
-                // Swipe Down
-                changeMode(scene, -1);
-            } else {
-                // Swipe Up
-                changeMode(scene, 1);
-            }
-        }
-    });
-}
-
-function changeMode(scene, direction) {
-    // direction: 1 (Next), -1 (Prev)
-    currentModeIndex = (currentModeIndex + direction + MODES.length) % MODES.length;
-    let newMode = MODES[currentModeIndex];
-
-    modeText.setText('MODE: ' + newMode);
-
-    // Visual feedback for mode switch
-    scene.tweens.add({
-        targets: modeText,
-        scale: 1.5,
-        duration: 100,
-        yoyo: true
-    });
-
-    console.log("Switched to mode:", newMode);
-}
-
-function drawZoneLines(scene) {
-    graphics.clear();
-    graphics.lineStyle(2, 0xffffff, 0.2);
-    // Line at 50%
-    graphics.lineBetween(0, height * 0.5, width, height * 0.5);
-    // Line at 75%
-    graphics.lineBetween(0, height * 0.75, width, height * 0.75);
-
-    // Label text (temporary)
-    scene.add.text(width - 100, height * 0.625, 'ATTACK', { fontSize: '16px', fill: '#ffffff50' }).setOrigin(0.5);
-    scene.add.text(width - 100, height * 0.875, 'DODGE', { fontSize: '16px', fill: '#ffffff50' }).setOrigin(0.5);
-}
-
-function flashZone(scene, y, h, color) {
-    let rect = scene.add.rectangle(width/2, y + h/2, width, h, color, 0.3);
-    scene.tweens.add({
-        targets: rect,
-        alpha: 0,
-        duration: 200,
-        onComplete: () => rect.destroy()
-    });
-}
-
-function update(time, delta) {
-    // Move grid to simulate running
-    this.grid.tilePositionX += gameSpeed;
-
-    // --- Custom Spawn Timer ---
-    spawnTimer += delta;
-    if (spawnTimer > 1500) {
-        spawnEnemy(this);
-        spawnTimer = 0;
-    }
-
-    // Remove bullets that go off screen
-    bullets.children.each(function(b) {
-        if (b.active && b.x > width) {
-            b.destroy();
-        }
-    }, this);
-
-    // Remove enemies that go off screen (and maybe penalize?)
-    enemies.children.each(function(e) {
-        if (e.active && e.x < -50) {
-            e.destroy();
-        }
-    }, this);
-}
-
-function fireBullet(scene) {
-    // Simple cooldown
-    let now = scene.time.now;
-    if (now - lastFired < 300) return;
-    lastFired = now;
-
-    // Create a bullet (Yellow square)
-    let bullet = scene.add.rectangle(player.x + 30, player.y, 20, 10, 0xffff00);
-    scene.physics.add.existing(bullet);
-    bullet.body.setVelocityX(600);
-    bullets.add(bullet);
-}
-
-function performDodge(scene) {
-    if (isDodging) return;
-    isDodging = true;
-
-    // Visual feedback: Transparency
-    player.alpha = 0.5;
-
-    // Logic: Invulnerable (we handle this in collision callback)
-
-    scene.time.delayedCall(500, () => {
-        isDodging = false;
-        player.alpha = 1;
-    });
-}
-
-function spawnEnemy(scene) {
-    let yPos = Phaser.Math.Between(50, height * 0.5); // Spawn in the top half (gameplay area)
-
-    // Keep enemy spawn within reasonable gameplay bounds (not too low, into buttons)
-    // Gameplay area is technically top 50%, but let's give it some padding.
-    yPos = Phaser.Math.Clamp(yPos, 50, (height * 0.5) - 50);
-
-    let enemy = scene.add.rectangle(width + 50, yPos, 40, 40, 0xff0000);
-    scene.physics.add.existing(enemy);
-    enemy.body.setVelocityX(-200 - (score * 5)); // Get faster as score increases
-    enemies.add(enemy);
-}
-
-function bulletHitEnemy(bullet, enemy) {
-    bullet.destroy();
-    enemy.destroy();
-    score += 10;
-    scoreText.setText('Score: ' + score);
-}
-
-function enemyHitPlayer(player, enemy) {
-    if (isDodging) {
-        // Successful dodge!
-        // Maybe slow time or bonus points?
-        return;
-    }
-
-    // Game Over Logic
-    this.physics.pause();
-    player.fillColor = 0x555555;
-    scoreText.setText('GAME OVER\nTap to Restart');
-    scoreText.setAlign('center');
-    scoreText.setOrigin(0.5);
-    scoreText.setPosition(width/2, height/2);
-
-    // Restart on tap
-    this.input.once('pointerdown', () => {
-        this.scene.restart();
-        score = 0;
-        isDodging = false;
-    });
-}
-
-function resize(gameSize) {
-    width = gameSize.width;
-    height = gameSize.height;
-
-    this.cameras.resize(width, height);
-    this.grid.setSize(width, height);
-
-    // Reposition UI if needed
-    // Recreate zones to match new height
-    // (Simplest way is just to update their coordinates, but recreating is safer for prototype)
-    if (zoneAttack) zoneAttack.destroy();
-    if (zoneDodge) zoneDodge.destroy();
-    if (zoneSwipe) zoneSwipe.destroy();
-    drawZoneLines(this);
-
-    // Re-bind zones
-    let zoneHeight = height * 0.25;
-    zoneAttack = this.add.zone(width/2, height * 0.625, width, zoneHeight).setOrigin(0.5).setInteractive();
-    zoneAttack.on('pointerdown', () => { fireBullet(this); flashZone(this, height * 0.5, zoneHeight, 0xff0000); });
-
-    zoneDodge = this.add.zone(width/2, height * 0.875, width, zoneHeight).setOrigin(0.5).setInteractive();
-    zoneDodge.on('pointerdown', () => { performDodge(this); flashZone(this, height * 0.75, zoneHeight, 0x00ff00); });
-
-    zoneSwipe = this.add.zone(width/2, height * 0.25, width, height * 0.5).setOrigin(0.5).setInteractive();
-}

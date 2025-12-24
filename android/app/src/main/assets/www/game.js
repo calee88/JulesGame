@@ -43,9 +43,9 @@ class GameScene extends Phaser.Scene {
         bg.strokeRect(0, 0, 64, 64); // Grid line
         bg.generateTexture('background', 64, 64);
 
-        // 2. Player
+        // 2. Player (white so tinting works properly)
         let p = this.make.graphics({ x: 0, y: 0, add: false });
-        p.fillStyle(0x00d4ff); // Cyan
+        p.fillStyle(0xffffff); // White
         p.fillRect(0, 0, 32, 32);
         p.generateTexture('player', 32, 32);
 

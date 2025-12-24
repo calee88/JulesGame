@@ -194,6 +194,12 @@ class GameScene extends Phaser.Scene {
             offsetX,
             0
         );
+
+        // Calculate zoom to maintain consistent view
+        // Target width: 720px (our reference resolution)
+        const targetWidth = 720;
+        const zoom = width / targetWidth;
+        this.cameras.main.setZoom(zoom);
     }
 
     setupGroups() {
@@ -526,6 +532,11 @@ class GameScene extends Phaser.Scene {
 
         this.cameras.main.setViewport(0, 0, width, height);
 
+        // Update camera zoom to maintain consistent view
+        const targetWidth = 720;
+        const zoom = width / targetWidth;
+        this.cameras.main.setZoom(zoom);
+
         if (this.zoneAttack) {
             const zoneHeight = height * GAME_CONFIG.ZONE_HEIGHT_RATIO;
             this.zoneAttack.setSize(width, zoneHeight)
@@ -557,6 +568,7 @@ function getScaleConfig() {
 
     if (aspectRatio >= MIN_ASPECT && aspectRatio <= MAX_ASPECT) {
         // Screen is portrait-ish, fill it completely
+        // Camera zoom will maintain consistent view
         return {
             mode: Phaser.Scale.RESIZE,
             width: '100%',

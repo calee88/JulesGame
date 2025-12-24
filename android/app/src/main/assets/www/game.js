@@ -207,7 +207,8 @@ class GameScene extends Phaser.Scene {
         this.scoreLabel.setX(this.cameras.main.scrollX + this.scale.width/2 - 100); // Center relative to cam
         this.scoreLabel.setY(this.scale.height/2);
 
-        this.input.once('pointerdown', () => {
+        // Restart on touch up (consistent with other button behavior)
+        this.input.once('pointerup', () => {
             this.scene.restart();
         });
     }

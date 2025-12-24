@@ -117,7 +117,22 @@ class GameScene extends Phaser.Scene {
             this.spawnTimer = 0;
         }
 
-        // --- 3. Cleanup ---
+        // --- 3. Update Enemy Movement (Track Player) ---
+        this.enemies.children.each(e => {
+            if (e.active && this.player.active) {
+                // Calculate direction to player
+                const angle = Phaser.Math.Angle.Between(e.x, e.y, this.player.x, this.player.y);
+                const speed = 150; // Enemy speed
+
+                // Set velocity toward player
+                e.setVelocity(
+                    Math.cos(angle) * speed,
+                    Math.sin(angle) * speed
+                );
+            }
+        });
+
+        // --- 4. Cleanup ---
         // Destroy bullets that flew too far (relative to player)
         const killLine = this.cameras.main.scrollX + this.scale.width + 100;
         const trailLine = this.cameras.main.scrollX - 100;
@@ -131,7 +146,7 @@ class GameScene extends Phaser.Scene {
             if (e.active && e.x < trailLine) e.destroy();
         });
 
-        // --- 4. Infinite Teleport (Floating Point Precision Guard) ---
+        // --- 5. Infinite Teleport (Floating Point Precision Guard) ---
         // If we go too far, teleport back?
         // For a simple prototype, Number.MAX_SAFE_INTEGER is huge, so 200px/s will run for millions of years.
         // We don't strictly need to wrap the world unless physics gets jittery.
@@ -144,13 +159,9 @@ class GameScene extends Phaser.Scene {
         const spawnX = cam.scrollX + cam.width + 100; // Just off-screen right
         const spawnY = Phaser.Math.Between(100, cam.height - 100);
 
-        // Enemy (Stationary or Moving Left?)
-        // If Player moves Right at 200, and Enemy is Stationary, relative speed is 200.
-        // If Enemy moves Left at 200, relative speed is 400.
-        // Let's make them move Left slightly to be aggressive.
-
+        // Enemy will track player position
         let enemy = this.enemies.create(spawnX, spawnY, 'enemy');
-        enemy.setVelocityX(-100);
+        // Velocity will be set in update() to track player
     }
 
     fireBullet() {

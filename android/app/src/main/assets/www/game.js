@@ -53,7 +53,7 @@ const GAME_CONFIG = {
     GAME_OVER_COLOR: 0xff0000,
 
     // Scoring
-    POINTS_PER_KILL: 10,
+    POINTS_PER_KILL: 10, // Points awarded per enemy killed
 
     // Graphics
     BACKGROUND_SIZE: 64,

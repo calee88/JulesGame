@@ -198,7 +198,7 @@ class GameScene extends Phaser.Scene {
         // Calculate zoom to maintain consistent view
         // Target width: 720px (our reference resolution)
         const targetWidth = 720;
-        const zoom = width / targetWidth;
+        const zoom = targetWidth / width;  // INVERTED: smaller screens zoom IN
         this.cameras.main.setZoom(zoom);
     }
 
@@ -534,7 +534,7 @@ class GameScene extends Phaser.Scene {
 
         // Update camera zoom to maintain consistent view
         const targetWidth = 720;
-        const zoom = width / targetWidth;
+        const zoom = targetWidth / width;  // INVERTED: smaller screens zoom IN
         this.cameras.main.setZoom(zoom);
 
         if (this.zoneAttack) {

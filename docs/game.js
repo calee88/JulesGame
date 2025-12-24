@@ -227,25 +227,23 @@ class GameScene extends Phaser.Scene {
             this.flashZone(height * 0.5, zoneHeight, 0xff0000);
         });
 
-        // Dodge (Bottom Lower)
-        this.zoneDodge = this.add.zone(width/2, height * 0.875, width, zoneHeight)
-            .setOrigin(0.5)
-            .setScrollFactor(0)
-            .setInteractive();
-
-        this.zoneDodge.on('pointerdown', () => {
-            this.performDodge();
-            this.flashZone(height * 0.75, zoneHeight, 0x00ff00);
-        });
-
         // Swipe Up Detection (Global) - Must start in bottom quarter and end above it
         let swipeStartY = 0;
         let swipeStartedInBottomQuarter = false;
+        let isSwipeGesture = false;
         const bottomQuarterThreshold = height * 0.75; // Bottom 25% of screen
 
         this.input.on('pointerdown', (pointer) => {
             swipeStartY = pointer.y;
             swipeStartedInBottomQuarter = pointer.y > bottomQuarterThreshold;
+            isSwipeGesture = false; // Reset
+        });
+
+        this.input.on('pointermove', (pointer) => {
+            // Detect if user is performing a swipe (moved vertically)
+            if (swipeStartedInBottomQuarter && Math.abs(pointer.y - swipeStartY) > 20) {
+                isSwipeGesture = true;
+            }
         });
 
         this.input.on('pointerup', (pointer) => {
@@ -254,7 +252,24 @@ class GameScene extends Phaser.Scene {
                 // Swipe up detected!
                 this.changeMode(1); // Cycle mode forward
                 swipeStartedInBottomQuarter = false; // Reset
+                isSwipeGesture = false;
             }
+        });
+
+        // Dodge (Bottom Lower) - Only trigger if not swiping
+        this.zoneDodge = this.add.zone(width/2, height * 0.875, width, zoneHeight)
+            .setOrigin(0.5)
+            .setScrollFactor(0)
+            .setInteractive();
+
+        this.zoneDodge.on('pointerdown', () => {
+            // Delay dodge check to see if user is swiping
+            this.time.delayedCall(50, () => {
+                if (!isSwipeGesture) {
+                    this.performDodge();
+                    this.flashZone(height * 0.75, zoneHeight, 0x00ff00);
+                }
+            });
         });
     }
 

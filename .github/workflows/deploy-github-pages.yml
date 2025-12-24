@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - jules-pistol-game-*  # Support auto-generated branches
       - claude/**  # Support Claude branches too
     paths:
       - 'android/app/src/main/assets/www/**'
@@ -12,44 +13,46 @@ on:
   # Allow manual trigger
   workflow_dispatch:
 
+# Allow only one concurrent deployment
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
+    # Required permissions for GitHub Pages deployment
     permissions:
-      contents: write  # Allow pushing changes
+      contents: read
+      pages: write
+      id-token: write
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Prepare files for deployment
+        run: |
+          # Copy www files to _site directory for deployment
+          mkdir -p _site
+          cp -r android/app/src/main/assets/www/* _site/
+
+          echo "✅ Files prepared for deployment:"
+          ls -la _site/
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          fetch-depth: 0  # Fetch all history for proper commits
+          path: '_site'
 
-      - name: Copy www to docs
-        run: |
-          # Remove old docs if exists
-          rm -rf docs
-
-          # Copy www folder to docs
-          mkdir -p docs
-          cp -r android/app/src/main/assets/www/* docs/
-
-          echo "✅ Files copied from www/ to docs/"
-          ls -la docs/
-
-      - name: Commit and push if changed
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          # Force add docs/ (it's in .gitignore)
-          git add -f docs/
-
-          # Check if there are changes to commit
-          if git diff --staged --quiet; then
-            echo "📝 No changes to commit"
-          else
-            git commit -m "🚀 Deploy: Auto-sync www/ to docs/ for GitHub Pages"
-            git push
-            echo "✅ Changes pushed to repository"
-          fi
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

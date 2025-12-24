@@ -546,10 +546,11 @@ class GameScene extends Phaser.Scene {
 const config = {
     type: Phaser.AUTO,
     scale: {
-        mode: Phaser.Scale.RESIZE,
+        mode: Phaser.Scale.FIT,  // Fit to screen while maintaining aspect ratio
         parent: 'game-container',
-        width: '100%',
-        height: '100%'
+        width: 720,   // Portrait width (9:16 aspect ratio)
+        height: 1280, // Portrait height
+        autoCenter: Phaser.Scale.CENTER_BOTH
     },
     physics: {
         default: 'arcade',

@@ -349,7 +349,7 @@ class GameScene extends Phaser.Scene {
 }
 
 const config = {
-    type: Phaser.CANVAS, // Canvas for stability
+    type: Phaser.AUTO, // Auto-select WebGL or Canvas (enables tinting)
     scale: {
         mode: Phaser.Scale.RESIZE,
         parent: 'game-container',

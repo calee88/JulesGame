@@ -202,7 +202,28 @@ class GameScene extends Phaser.Scene {
 
         // Game Over
         this.physics.pause();
-        player.setTint(0xff0000); // Red tint for visibility
+
+        // Visual effects
+        player.setTint(0xff0000); // Red tint
+        player.setAlpha(0.5); // Semi-transparent
+
+        // Add screen-wide red flash overlay
+        const overlay = this.add.rectangle(
+            this.scale.width / 2,
+            this.scale.height / 2,
+            this.scale.width,
+            this.scale.height,
+            0xff0000,
+            0.3
+        ).setScrollFactor(0);
+
+        // Fade out the overlay
+        this.tweens.add({
+            targets: overlay,
+            alpha: 0,
+            duration: 1000,
+            ease: 'Power2'
+        });
 
         // Update and center the score label (it has scrollFactor 0, so use screen coords)
         this.scoreLabel.setText('GAME OVER\nScore: ' + this.score + '\n\nTap to Restart');

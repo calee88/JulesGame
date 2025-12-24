@@ -43,9 +43,9 @@ class GameScene extends Phaser.Scene {
         bg.strokeRect(0, 0, 64, 64); // Grid line
         bg.generateTexture('background', 64, 64);
 
-        // 2. Player (white so tinting works properly)
+        // 2. Player
         let p = this.make.graphics({ x: 0, y: 0, add: false });
-        p.fillStyle(0xffffff); // White
+        p.fillStyle(0x00d4ff); // Cyan
         p.fillRect(0, 0, 32, 32);
         p.generateTexture('player', 32, 32);
 
@@ -204,7 +204,7 @@ class GameScene extends Phaser.Scene {
         this.physics.pause();
 
         // Visual effects
-        player.setTint(0xff0000); // Red tint
+        player.setTintFill(0xff0000); // Red fill (replaces color instead of multiplying)
         player.setAlpha(0.5); // Semi-transparent
 
         // Add screen-wide red flash overlay

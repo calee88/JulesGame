@@ -227,32 +227,45 @@ class GameScene extends Phaser.Scene {
             this.flashZone(height * 0.5, zoneHeight, 0xff0000);
         });
 
-        // Swipe Up Detection (Global) - Must start in bottom quarter and end above it
+        // Swipe Detection (Global) - Bidirectional mode switching
         let swipeStartY = 0;
         let swipeStartedInBottomQuarter = false;
+        let swipeStartedAboveThreshold = false;
         let isSwipeGesture = false;
         const bottomQuarterThreshold = height * 0.75; // Bottom 25% of screen
 
         this.input.on('pointerdown', (pointer) => {
             swipeStartY = pointer.y;
             swipeStartedInBottomQuarter = pointer.y > bottomQuarterThreshold;
+            swipeStartedAboveThreshold = pointer.y <= bottomQuarterThreshold;
             isSwipeGesture = false; // Reset
         });
 
         this.input.on('pointermove', (pointer) => {
             // Detect if user is performing a swipe (moved vertically)
-            if (swipeStartedInBottomQuarter && Math.abs(pointer.y - swipeStartY) > 20) {
+            const verticalMovement = Math.abs(pointer.y - swipeStartY);
+            if (verticalMovement > 20) {
                 isSwipeGesture = true;
             }
         });
 
         this.input.on('pointerup', (pointer) => {
-            // Check if swipe started in bottom quarter and ended above it
+            // Swipe UP: Start in bottom quarter, end above it
             if (swipeStartedInBottomQuarter && pointer.y <= bottomQuarterThreshold) {
-                // Swipe up detected!
                 this.changeMode(1); // Cycle mode forward
-                swipeStartedInBottomQuarter = false; // Reset
+                swipeStartedInBottomQuarter = false;
+                swipeStartedAboveThreshold = false;
                 isSwipeGesture = false;
+                return;
+            }
+
+            // Swipe DOWN: Start above threshold, end in bottom quarter
+            if (swipeStartedAboveThreshold && pointer.y > bottomQuarterThreshold) {
+                this.changeMode(-1); // Cycle mode backward
+                swipeStartedInBottomQuarter = false;
+                swipeStartedAboveThreshold = false;
+                isSwipeGesture = false;
+                return;
             }
         });
 

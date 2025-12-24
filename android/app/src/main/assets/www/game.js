@@ -1,233 +1,384 @@
 // Ported from: https://github.com/ourcade/infinite-runner-template-phaser3/blob/master/src/scenes/Game.ts
 // Adapted for Vanilla JS + Programmatic Assets
 
+// ============================================================================
+// GAME CONSTANTS
+// ============================================================================
+const GAME_CONFIG = {
+    // Player
+    PLAYER_SPEED: 200,
+    PLAYER_START_X_RATIO: 0.2,
+    PLAYER_COLOR: 0x00d4ff,
+    PLAYER_SIZE: 32,
+
+    // Enemy
+    ENEMY_SPEED: 150,
+    ENEMY_SPAWN_INTERVAL: 1500,
+    ENEMY_COLOR: 0xff0000,
+    ENEMY_SIZE: 32,
+    ENEMY_SPAWN_MARGIN: 100,
+
+    // Bullet
+    BULLET_SPEED: 600,
+    BULLET_FIRE_RATE: 300,
+    BULLET_OFFSET_X: 20,
+    BULLET_COLOR: 0xffff00,
+    BULLET_WIDTH: 16,
+    BULLET_HEIGHT: 8,
+
+    // Dodge
+    DODGE_DURATION: 500,
+    DODGE_ALPHA: 0.5,
+
+    // UI Layout (as ratio of screen height)
+    ATTACK_ZONE_Y: 0.625,
+    DODGE_ZONE_Y: 0.875,
+    ZONE_HEIGHT_RATIO: 0.25,
+    BOTTOM_QUARTER_THRESHOLD: 0.75,
+
+    // Swipe Detection
+    SWIPE_MIN_DISTANCE: 20,
+
+    // Cleanup
+    OFFSCREEN_MARGIN: 100,
+
+    // Camera
+    CAMERA_FOLLOW_OFFSET_X_RATIO: -0.3,
+    CAMERA_LERP: 0.1,
+
+    // Game Over
+    GAME_OVER_OVERLAY_ALPHA: 0.3,
+    GAME_OVER_OVERLAY_FADE: 1000,
+    GAME_OVER_PLAYER_ALPHA: 0.5,
+    GAME_OVER_COLOR: 0xff0000,
+
+    // Scoring
+    POINTS_PER_KILL: 10,
+
+    // Graphics
+    BACKGROUND_SIZE: 64,
+    BACKGROUND_COLOR: 0x1a1a2e,
+    BACKGROUND_GRID_COLOR: 0x0f3460,
+
+    // Zone Flash
+    ZONE_FLASH_DURATION: 200,
+    ZONE_FLASH_ALPHA: 0.3,
+    ATTACK_FLASH_COLOR: 0xff0000,
+    DODGE_FLASH_COLOR: 0x00ff00,
+
+    // Mode
+    MODE_SCALE_DURATION: 100,
+    MODE_SCALE_MAX: 1.5
+};
+
+// ============================================================================
+// GAME SCENE
+// ============================================================================
 class GameScene extends Phaser.Scene {
     constructor() {
         super('game-scene');
+        this.initializeState();
+    }
 
-        // State
+    /**
+     * Initialize all instance variables
+     */
+    initializeState() {
+        // Game State
         this.score = 0;
-        this.scoreLabel = null;
-        this.player = null;
-        this.cursors = null;
-
-        // Groups
-        this.enemies = null;
-        this.bullets = null;
-
-        // World Constants
-        this.gameSpeed = 5; // not used directly if we use velocity
         this.spawnTimer = 0;
         this.lastFired = 0;
+        this.isDodging = false;
 
-        // Mode
+        // Mode System
         this.modes = ['PISTOL', 'SHIELD', 'SWORD'];
         this.currentModeIndex = 0;
-        this.modeText = null;
 
-        // One-handed controls
+        // Swipe Detection State
+        this.swipeStartY = 0;
+        this.swipeStartedInBottomQuarter = false;
+        this.swipeStartedAboveThreshold = false;
+        this.isSwipeGesture = false;
+
+        // Game Objects
+        this.player = null;
+        this.enemies = null;
+        this.bullets = null;
+        this.background = null;
+
+        // UI Elements
+        this.scoreLabel = null;
+        this.modeText = null;
         this.zoneAttack = null;
         this.zoneDodge = null;
-        this.zoneSwipe = null;
-        this.isDodging = false;
     }
 
+    /**
+     * Preload: Generate procedural assets
+     */
     preload() {
-        // --- Generate Assets Programmatically (No external files needed) ---
-
-        // 1. Background (Tile)
-        let bg = this.make.graphics({ x: 0, y: 0, add: false });
-        bg.fillStyle(0x1a1a2e);
-        bg.fillRect(0, 0, 64, 64); // Dark Blue Tile
-        bg.lineStyle(1, 0x0f3460, 0.5);
-        bg.strokeRect(0, 0, 64, 64); // Grid line
-        bg.generateTexture('background', 64, 64);
-
-        // 2. Player
-        let p = this.make.graphics({ x: 0, y: 0, add: false });
-        p.fillStyle(0x00d4ff); // Cyan
-        p.fillRect(0, 0, 32, 32);
-        p.generateTexture('player', 32, 32);
-
-        // 3. Enemy
-        let e = this.make.graphics({ x: 0, y: 0, add: false });
-        e.fillStyle(0xff0000); // Red
-        e.fillRect(0, 0, 32, 32);
-        e.generateTexture('enemy', 32, 32);
-
-        // 4. Bullet
-        let b = this.make.graphics({ x: 0, y: 0, add: false });
-        b.fillStyle(0xffff00); // Yellow
-        b.fillRect(0, 0, 16, 8);
-        b.generateTexture('bullet', 16, 8);
+        this.generateBackground();
+        this.generatePlayer();
+        this.generateEnemy();
+        this.generateBullet();
     }
 
-    create() {
-        const width = this.scale.width;
-        const height = this.scale.height;
+    generateBackground() {
+        const bg = this.make.graphics({ x: 0, y: 0, add: false });
+        bg.fillStyle(GAME_CONFIG.BACKGROUND_COLOR);
+        bg.fillRect(0, 0, GAME_CONFIG.BACKGROUND_SIZE, GAME_CONFIG.BACKGROUND_SIZE);
+        bg.lineStyle(1, GAME_CONFIG.BACKGROUND_GRID_COLOR, 0.5);
+        bg.strokeRect(0, 0, GAME_CONFIG.BACKGROUND_SIZE, GAME_CONFIG.BACKGROUND_SIZE);
+        bg.generateTexture('background', GAME_CONFIG.BACKGROUND_SIZE, GAME_CONFIG.BACKGROUND_SIZE);
+    }
 
-        // 1. Background (Scrolling TileSprite)
-        // We make it huge so it covers the initial area, but we'll scroll it manually or stick it to camera
+    generatePlayer() {
+        const p = this.make.graphics({ x: 0, y: 0, add: false });
+        p.fillStyle(GAME_CONFIG.PLAYER_COLOR);
+        p.fillRect(0, 0, GAME_CONFIG.PLAYER_SIZE, GAME_CONFIG.PLAYER_SIZE);
+        p.generateTexture('player', GAME_CONFIG.PLAYER_SIZE, GAME_CONFIG.PLAYER_SIZE);
+    }
+
+    generateEnemy() {
+        const e = this.make.graphics({ x: 0, y: 0, add: false });
+        e.fillStyle(GAME_CONFIG.ENEMY_COLOR);
+        e.fillRect(0, 0, GAME_CONFIG.ENEMY_SIZE, GAME_CONFIG.ENEMY_SIZE);
+        e.generateTexture('enemy', GAME_CONFIG.ENEMY_SIZE, GAME_CONFIG.ENEMY_SIZE);
+    }
+
+    generateBullet() {
+        const b = this.make.graphics({ x: 0, y: 0, add: false });
+        b.fillStyle(GAME_CONFIG.BULLET_COLOR);
+        b.fillRect(0, 0, GAME_CONFIG.BULLET_WIDTH, GAME_CONFIG.BULLET_HEIGHT);
+        b.generateTexture('bullet', GAME_CONFIG.BULLET_WIDTH, GAME_CONFIG.BULLET_HEIGHT);
+    }
+
+    /**
+     * Create: Initialize game objects and setup
+     */
+    create() {
+        const { width, height } = this.scale;
+
+        this.setupBackground(width, height);
+        this.setupPlayer(width, height);
+        this.setupCamera(width);
+        this.setupGroups();
+        this.setupUI(width, height);
+        this.setupInputZones(width, height);
+        this.setupCollisions();
+        this.setupResize();
+    }
+
+    setupBackground(width, height) {
         this.background = this.add.tileSprite(0, 0, width, height, 'background')
             .setOrigin(0)
-            .setScrollFactor(0); // Fix to camera
+            .setScrollFactor(0);
+    }
 
-        // 2. Player (Moving Right)
-        this.player = this.physics.add.sprite(width * 0.2, height / 2, 'player');
-        this.player.setCollideWorldBounds(false); // Let it run forever
-        this.player.setVelocityX(200); // CONSTANT FORWARD SPEED
+    setupPlayer(width, height) {
+        const startX = width * GAME_CONFIG.PLAYER_START_X_RATIO;
+        const startY = height / 2;
 
-        // 3. Camera (Follow Player)
-        this.cameras.main.startFollow(this.player, true, 0.1, 0.1, -width * 0.3, 0); // Offset to keep player on left
-        // No Bounds! Infinite world.
+        this.player = this.physics.add.sprite(startX, startY, 'player');
+        this.player.setCollideWorldBounds(false);
+        this.player.setVelocityX(GAME_CONFIG.PLAYER_SPEED);
+    }
 
-        // 4. Object Groups
+    setupCamera(width) {
+        const offsetX = width * GAME_CONFIG.CAMERA_FOLLOW_OFFSET_X_RATIO;
+        this.cameras.main.startFollow(
+            this.player,
+            true,
+            GAME_CONFIG.CAMERA_LERP,
+            GAME_CONFIG.CAMERA_LERP,
+            offsetX,
+            0
+        );
+    }
+
+    setupGroups() {
         this.enemies = this.physics.add.group();
         this.bullets = this.physics.add.group();
+    }
 
-        // 5. UI (Fixed to Camera)
-        this.scoreLabel = this.add.text(10, 10, 'Score: 0', { fontSize: '24px', fill: '#fff' })
-            .setScrollFactor(0);
-        this.modeText = this.add.text(width / 2, 50, 'MODE: PISTOL', { fontSize: '24px', fill: '#00ff00' })
-            .setOrigin(0.5)
-            .setScrollFactor(0);
+    setupUI(width, height) {
+        this.scoreLabel = this.add.text(10, 10, 'Score: 0', {
+            fontSize: '24px',
+            fill: '#fff'
+        }).setScrollFactor(0);
 
-        // 6. Controls (Zones)
-        this.createInputZones(width, height);
+        this.modeText = this.add.text(width / 2, 50, 'MODE: PISTOL', {
+            fontSize: '24px',
+            fill: '#00ff00'
+        })
+        .setOrigin(0.5)
+        .setScrollFactor(0);
+    }
 
-        // 7. Collisions
+    setupInputZones(width, height) {
+        this.createSwipeDetection(height);
+        this.createAttackZone(width, height);
+        this.createDodgeZone(width, height);
+    }
+
+    setupCollisions() {
         this.physics.add.overlap(this.bullets, this.enemies, this.handleBulletHitEnemy, null, this);
         this.physics.add.overlap(this.player, this.enemies, this.handleEnemyHitPlayer, null, this);
+    }
 
-        // Handle resize
+    setupResize() {
         this.scale.on('resize', this.resize, this);
     }
 
+    /**
+     * Update: Main game loop
+     */
     update(time, delta) {
-        // --- 1. Scroll Background ---
-        // Since background is ScrollFactor 0, it stays on screen.
-        // We animate its tilePosition to match camera movement.
-        this.background.tilePositionX = this.cameras.main.scrollX;
+        this.updateBackground();
+        this.updateEnemySpawning(delta);
+        this.updateEnemyMovement();
+        this.cleanupOffscreenObjects();
+    }
 
-        // --- 2. Spawn Enemies ---
-        // Logic: Spawn ahead of the camera view
+    updateBackground() {
+        this.background.tilePositionX = this.cameras.main.scrollX;
+    }
+
+    updateEnemySpawning(delta) {
         this.spawnTimer += delta;
-        if (this.spawnTimer > 1500) {
+        if (this.spawnTimer > GAME_CONFIG.ENEMY_SPAWN_INTERVAL) {
             this.spawnEnemy();
             this.spawnTimer = 0;
         }
+    }
 
-        // --- 3. Update Enemy Movement (Track Player) ---
-        this.enemies.children.each(e => {
-            if (e.active && this.player.active) {
-                // Calculate direction to player
-                const angle = Phaser.Math.Angle.Between(e.x, e.y, this.player.x, this.player.y);
-                const speed = 150; // Enemy speed
+    updateEnemyMovement() {
+        this.enemies.children.each(enemy => {
+            if (enemy.active && this.player.active) {
+                const angle = Phaser.Math.Angle.Between(
+                    enemy.x, enemy.y,
+                    this.player.x, this.player.y
+                );
 
-                // Set velocity toward player
-                e.setVelocity(
-                    Math.cos(angle) * speed,
-                    Math.sin(angle) * speed
+                enemy.setVelocity(
+                    Math.cos(angle) * GAME_CONFIG.ENEMY_SPEED,
+                    Math.sin(angle) * GAME_CONFIG.ENEMY_SPEED
                 );
             }
         });
-
-        // --- 4. Cleanup ---
-        // Destroy bullets that flew too far (relative to player)
-        const killLine = this.cameras.main.scrollX + this.scale.width + 100;
-        const trailLine = this.cameras.main.scrollX - 100;
-
-        this.bullets.children.each(b => {
-            if (b.active && b.x > killLine) b.destroy();
-        });
-
-        // Destroy enemies that player passed
-        this.enemies.children.each(e => {
-            if (e.active && e.x < trailLine) e.destroy();
-        });
-
-        // --- 5. Infinite Teleport (Floating Point Precision Guard) ---
-        // If we go too far, teleport back?
-        // For a simple prototype, Number.MAX_SAFE_INTEGER is huge, so 200px/s will run for millions of years.
-        // We don't strictly need to wrap the world unless physics gets jittery.
-        // The original tutorial wrapped because it reused static assets (houses).
-        // Since we spawn new enemies, we can just keep going.
     }
 
+    cleanupOffscreenObjects() {
+        const cam = this.cameras.main;
+        const killLine = cam.scrollX + this.scale.width + GAME_CONFIG.OFFSCREEN_MARGIN;
+        const trailLine = cam.scrollX - GAME_CONFIG.OFFSCREEN_MARGIN;
+
+        this.bullets.children.each(bullet => {
+            if (bullet.active && bullet.x > killLine) {
+                bullet.destroy();
+            }
+        });
+
+        this.enemies.children.each(enemy => {
+            if (enemy.active && enemy.x < trailLine) {
+                enemy.destroy();
+            }
+        });
+    }
+
+    /**
+     * Spawn an enemy off-screen
+     */
     spawnEnemy() {
         const cam = this.cameras.main;
-        const spawnX = cam.scrollX + cam.width + 100; // Just off-screen right
-        const spawnY = Phaser.Math.Between(100, cam.height - 100);
+        const spawnX = cam.scrollX + cam.width + GAME_CONFIG.ENEMY_SPAWN_MARGIN;
+        const spawnY = Phaser.Math.Between(
+            GAME_CONFIG.ENEMY_SPAWN_MARGIN,
+            cam.height - GAME_CONFIG.ENEMY_SPAWN_MARGIN
+        );
 
-        // Enemy will track player position
-        let enemy = this.enemies.create(spawnX, spawnY, 'enemy');
-        // Velocity will be set in update() to track player
+        this.enemies.create(spawnX, spawnY, 'enemy');
     }
 
+    /**
+     * Fire a bullet from the player
+     */
     fireBullet() {
         if (!this.player.active) return;
 
         const now = this.time.now;
-        if (now - this.lastFired < 300) return;
+        if (now - this.lastFired < GAME_CONFIG.BULLET_FIRE_RATE) return;
         this.lastFired = now;
 
-        // Spawn bullet at player position
-        let b = this.bullets.create(this.player.x + 20, this.player.y, 'bullet');
-        // Bullet must move faster than player!
-        // Player = 200. Bullet = 600.
-        b.setVelocityX(600);
+        const bullet = this.bullets.create(
+            this.player.x + GAME_CONFIG.BULLET_OFFSET_X,
+            this.player.y,
+            'bullet'
+        );
+        bullet.setVelocityX(GAME_CONFIG.BULLET_SPEED);
     }
 
+    /**
+     * Perform dodge action
+     */
     performDodge() {
         if (this.isDodging) return;
-        this.isDodging = true;
-        this.player.alpha = 0.5;
 
-        // Simple timer for dodge duration
-        this.time.delayedCall(500, () => {
+        this.isDodging = true;
+        this.player.alpha = GAME_CONFIG.DODGE_ALPHA;
+
+        this.time.delayedCall(GAME_CONFIG.DODGE_DURATION, () => {
             this.isDodging = false;
             this.player.alpha = 1;
         });
     }
 
+    /**
+     * Handle bullet hitting enemy
+     */
     handleBulletHitEnemy(bullet, enemy) {
         bullet.destroy();
         enemy.destroy();
-        this.score += 10;
+        this.score += GAME_CONFIG.POINTS_PER_KILL;
         this.scoreLabel.setText('Score: ' + this.score);
     }
 
+    /**
+     * Handle enemy hitting player (Game Over)
+     */
     handleEnemyHitPlayer(player, enemy) {
         if (this.isDodging) return;
 
-        // Game Over
         this.physics.pause();
+        this.showGameOverEffects(player);
+        this.showGameOverUI();
+        this.setupRestart();
+    }
 
-        // Visual effects
-        player.setTintFill(0xff0000); // Red fill (replaces color instead of multiplying)
-        player.setAlpha(0.5); // Semi-transparent
+    showGameOverEffects(player) {
+        player.setTintFill(GAME_CONFIG.GAME_OVER_COLOR);
+        player.setAlpha(GAME_CONFIG.GAME_OVER_PLAYER_ALPHA);
 
-        // Add screen-wide red flash overlay
         const overlay = this.add.rectangle(
             this.scale.width / 2,
             this.scale.height / 2,
             this.scale.width,
             this.scale.height,
-            0xff0000,
-            0.3
+            GAME_CONFIG.GAME_OVER_COLOR,
+            GAME_CONFIG.GAME_OVER_OVERLAY_ALPHA
         ).setScrollFactor(0);
 
-        // Fade out the overlay
         this.tweens.add({
             targets: overlay,
             alpha: 0,
-            duration: 1000,
+            duration: GAME_CONFIG.GAME_OVER_OVERLAY_FADE,
             ease: 'Power2'
         });
+    }
 
-        // Update and center the score label (it has scrollFactor 0, so use screen coords)
+    showGameOverUI() {
         this.scoreLabel.setText('GAME OVER\nScore: ' + this.score + '\n\nTap to Restart');
-        this.scoreLabel.setOrigin(0.5); // Center origin
+        this.scoreLabel.setOrigin(0.5);
         this.scoreLabel.setX(this.scale.width / 2);
         this.scoreLabel.setY(this.scale.height / 2);
         this.scoreLabel.setStyle({
@@ -237,119 +388,163 @@ class GameScene extends Phaser.Scene {
             backgroundColor: '#000000',
             padding: { x: 20, y: 20 }
         });
+    }
 
-        // Restart on touch up (consistent with other button behavior)
+    setupRestart() {
         this.input.once('pointerup', () => {
             this.scene.restart();
         });
     }
 
-    createInputZones(width, height) {
-        // We use scrollFactor(0) for Zones so they stick to the screen!
-        let zoneHeight = height * 0.25;
+    /**
+     * Create swipe detection
+     */
+    createSwipeDetection(height) {
+        const threshold = height * GAME_CONFIG.BOTTOM_QUARTER_THRESHOLD;
 
-        // Swipe Detection (Global) - Bidirectional mode switching
-        let swipeStartY = 0;
-        let swipeStartedInBottomQuarter = false;
-        let swipeStartedAboveThreshold = false;
-        let isSwipeGesture = false;
-        const bottomQuarterThreshold = height * 0.75; // Bottom 25% of screen
+        this.input.on('pointerdown', (pointer) => {
+            this.swipeStartY = pointer.y;
+            this.swipeStartedInBottomQuarter = pointer.y > threshold;
+            this.swipeStartedAboveThreshold = pointer.y <= threshold;
+            this.isSwipeGesture = false;
+        });
 
-        // Attack (Bottom Upper) - Trigger on touch up if no swipe
-        this.zoneAttack = this.add.zone(width/2, height * 0.625, width, zoneHeight)
+        this.input.on('pointermove', (pointer) => {
+            const verticalMovement = Math.abs(pointer.y - this.swipeStartY);
+            if (verticalMovement > GAME_CONFIG.SWIPE_MIN_DISTANCE) {
+                this.isSwipeGesture = true;
+            }
+        });
+
+        this.input.on('pointerup', (pointer) => {
+            this.handleSwipeUp(pointer, threshold);
+            this.handleSwipeDown(pointer, threshold);
+        });
+    }
+
+    handleSwipeUp(pointer, threshold) {
+        if (this.swipeStartedInBottomQuarter && pointer.y <= threshold) {
+            this.changeMode(1);
+            this.resetSwipeState();
+        }
+    }
+
+    handleSwipeDown(pointer, threshold) {
+        if (this.swipeStartedAboveThreshold && pointer.y > threshold) {
+            this.changeMode(-1);
+            this.resetSwipeState();
+        }
+    }
+
+    resetSwipeState() {
+        this.swipeStartedInBottomQuarter = false;
+        this.swipeStartedAboveThreshold = false;
+        this.isSwipeGesture = false;
+    }
+
+    /**
+     * Create attack zone
+     */
+    createAttackZone(width, height) {
+        const zoneHeight = height * GAME_CONFIG.ZONE_HEIGHT_RATIO;
+        const zoneY = height * GAME_CONFIG.ATTACK_ZONE_Y;
+
+        this.zoneAttack = this.add.zone(width / 2, zoneY, width, zoneHeight)
             .setOrigin(0.5)
             .setScrollFactor(0)
             .setInteractive();
 
         this.zoneAttack.on('pointerup', () => {
-            if (!isSwipeGesture) {
+            if (!this.isSwipeGesture) {
                 this.fireBullet();
-                this.flashZone(height * 0.5, zoneHeight, 0xff0000);
+                this.flashZone(zoneY - zoneHeight / 2, zoneHeight, GAME_CONFIG.ATTACK_FLASH_COLOR);
             }
         });
+    }
 
-        this.input.on('pointerdown', (pointer) => {
-            swipeStartY = pointer.y;
-            swipeStartedInBottomQuarter = pointer.y > bottomQuarterThreshold;
-            swipeStartedAboveThreshold = pointer.y <= bottomQuarterThreshold;
-            isSwipeGesture = false; // Reset
-        });
+    /**
+     * Create dodge zone
+     */
+    createDodgeZone(width, height) {
+        const zoneHeight = height * GAME_CONFIG.ZONE_HEIGHT_RATIO;
+        const zoneY = height * GAME_CONFIG.DODGE_ZONE_Y;
 
-        this.input.on('pointermove', (pointer) => {
-            // Detect if user is performing a swipe (moved vertically)
-            const verticalMovement = Math.abs(pointer.y - swipeStartY);
-            if (verticalMovement > 20) {
-                isSwipeGesture = true;
-            }
-        });
-
-        this.input.on('pointerup', (pointer) => {
-            // Swipe UP: Start in bottom quarter, end above it
-            if (swipeStartedInBottomQuarter && pointer.y <= bottomQuarterThreshold) {
-                this.changeMode(1); // Cycle mode forward
-                swipeStartedInBottomQuarter = false;
-                swipeStartedAboveThreshold = false;
-                isSwipeGesture = false;
-                return;
-            }
-
-            // Swipe DOWN: Start above threshold, end in bottom quarter
-            if (swipeStartedAboveThreshold && pointer.y > bottomQuarterThreshold) {
-                this.changeMode(-1); // Cycle mode backward
-                swipeStartedInBottomQuarter = false;
-                swipeStartedAboveThreshold = false;
-                isSwipeGesture = false;
-                return;
-            }
-        });
-
-        // Dodge (Bottom Lower) - Trigger on touch up if no swipe
-        this.zoneDodge = this.add.zone(width/2, height * 0.875, width, zoneHeight)
+        this.zoneDodge = this.add.zone(width / 2, zoneY, width, zoneHeight)
             .setOrigin(0.5)
             .setScrollFactor(0)
             .setInteractive();
 
         this.zoneDodge.on('pointerup', () => {
-            if (!isSwipeGesture) {
+            if (!this.isSwipeGesture) {
                 this.performDodge();
-                this.flashZone(height * 0.75, zoneHeight, 0x00ff00);
+                this.flashZone(zoneY - zoneHeight / 2, zoneHeight, GAME_CONFIG.DODGE_FLASH_COLOR);
             }
         });
     }
 
-    flashZone(y, h, color) {
-        let r = this.add.rectangle(this.scale.width/2, y + h/2, this.scale.width, h, color, 0.3)
-            .setScrollFactor(0);
+    /**
+     * Flash zone feedback
+     */
+    flashZone(y, height, color) {
+        const rect = this.add.rectangle(
+            this.scale.width / 2,
+            y + height / 2,
+            this.scale.width,
+            height,
+            color,
+            GAME_CONFIG.ZONE_FLASH_ALPHA
+        ).setScrollFactor(0);
+
         this.tweens.add({
-            targets: r,
+            targets: rect,
             alpha: 0,
-            duration: 200,
-            onComplete: () => r.destroy()
+            duration: GAME_CONFIG.ZONE_FLASH_DURATION,
+            onComplete: () => rect.destroy()
         });
     }
 
-    changeMode(dir) {
-        this.currentModeIndex = (this.currentModeIndex + dir + this.modes.length) % this.modes.length;
+    /**
+     * Change mode (cycle through weapon modes)
+     */
+    changeMode(direction) {
+        this.currentModeIndex = (this.currentModeIndex + direction + this.modes.length) % this.modes.length;
         this.modeText.setText('MODE: ' + this.modes[this.currentModeIndex]);
-        this.tweens.add({ targets: this.modeText, scale: 1.5, duration: 100, yoyo: true });
+
+        this.tweens.add({
+            targets: this.modeText,
+            scale: GAME_CONFIG.MODE_SCALE_MAX,
+            duration: GAME_CONFIG.MODE_SCALE_DURATION,
+            yoyo: true
+        });
     }
 
+    /**
+     * Handle window resize
+     */
     resize(gameSize) {
-        const width = gameSize.width;
-        const height = gameSize.height;
+        const { width, height } = gameSize;
+
         this.cameras.main.setViewport(0, 0, width, height);
-        // Re-position UI elements?
-        // For prototype, simple reload is safer, but let's just update zones
+
         if (this.zoneAttack) {
-            this.zoneAttack.setSize(width, height * 0.25).setPosition(width/2, height * 0.625);
-            this.zoneDodge.setSize(width, height * 0.25).setPosition(width/2, height * 0.875);
+            const zoneHeight = height * GAME_CONFIG.ZONE_HEIGHT_RATIO;
+            this.zoneAttack.setSize(width, zoneHeight)
+                .setPosition(width / 2, height * GAME_CONFIG.ATTACK_ZONE_Y);
+            this.zoneDodge.setSize(width, zoneHeight)
+                .setPosition(width / 2, height * GAME_CONFIG.DODGE_ZONE_Y);
         }
-        if (this.background) this.background.setSize(width, height);
+
+        if (this.background) {
+            this.background.setSize(width, height);
+        }
     }
 }
 
+// ============================================================================
+// GAME CONFIGURATION
+// ============================================================================
 const config = {
-    type: Phaser.AUTO, // Auto-select WebGL or Canvas (enables tinting)
+    type: Phaser.AUTO,
     scale: {
         mode: Phaser.Scale.RESIZE,
         parent: 'game-container',

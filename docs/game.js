@@ -238,17 +238,22 @@ class GameScene extends Phaser.Scene {
             this.flashZone(height * 0.75, zoneHeight, 0x00ff00);
         });
 
-        // Mode Switch (Top Half) - Swipe logic
-        this.zoneSwipe = this.add.zone(width/2, height * 0.25, width, height * 0.5)
-            .setOrigin(0.5)
-            .setScrollFactor(0)
-            .setInteractive();
+        // Swipe Up Detection (Global) - Must start in bottom quarter and end above it
+        let swipeStartY = 0;
+        let swipeStartedInBottomQuarter = false;
+        const bottomQuarterThreshold = height * 0.75; // Bottom 25% of screen
 
-        let startY = 0;
-        this.zoneSwipe.on('pointerdown', (p) => startY = p.y);
-        this.zoneSwipe.on('pointerup', (p) => {
-            if (Math.abs(p.y - startY) > 50) {
-                this.changeMode(p.y > startY ? -1 : 1);
+        this.input.on('pointerdown', (pointer) => {
+            swipeStartY = pointer.y;
+            swipeStartedInBottomQuarter = pointer.y > bottomQuarterThreshold;
+        });
+
+        this.input.on('pointerup', (pointer) => {
+            // Check if swipe started in bottom quarter and ended above it
+            if (swipeStartedInBottomQuarter && pointer.y <= bottomQuarterThreshold) {
+                // Swipe up detected!
+                this.changeMode(1); // Cycle mode forward
+                swipeStartedInBottomQuarter = false; // Reset
             }
         });
     }
@@ -279,7 +284,6 @@ class GameScene extends Phaser.Scene {
         if (this.zoneAttack) {
             this.zoneAttack.setSize(width, height * 0.25).setPosition(width/2, height * 0.625);
             this.zoneDodge.setSize(width, height * 0.25).setPosition(width/2, height * 0.875);
-            this.zoneSwipe.setSize(width, height * 0.5).setPosition(width/2, height * 0.25);
         }
         if (this.background) this.background.setSize(width, height);
     }

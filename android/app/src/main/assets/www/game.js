@@ -543,14 +543,46 @@ class GameScene extends Phaser.Scene {
 // ============================================================================
 // GAME CONFIGURATION
 // ============================================================================
+
+// Determine scale mode based on aspect ratio
+function getScaleConfig() {
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    const aspectRatio = height / width;
+
+    // Target portrait aspect ratio: 16:9 = 1.78
+    // Accept range: 1.5 to 2.2 (covers most phones in portrait)
+    const MIN_ASPECT = 1.5;  // Wider screens (like tablets in portrait)
+    const MAX_ASPECT = 2.2;  // Taller screens (like 20:9 phones)
+
+    if (aspectRatio >= MIN_ASPECT && aspectRatio <= MAX_ASPECT) {
+        // Screen is portrait-ish, fill it completely
+        return {
+            mode: Phaser.Scale.RESIZE,
+            width: '100%',
+            height: '100%'
+        };
+    } else {
+        // Screen is too wide or too tall, use fixed ratio
+        return {
+            mode: Phaser.Scale.FIT,
+            width: 720,
+            height: 1280,
+            autoCenter: Phaser.Scale.CENTER_BOTH
+        };
+    }
+}
+
+const scaleConfig = getScaleConfig();
+
 const config = {
     type: Phaser.AUTO,
     scale: {
-        mode: Phaser.Scale.FIT,  // Fit to screen while maintaining aspect ratio
+        mode: scaleConfig.mode,
         parent: 'game-container',
-        width: 720,   // Portrait width (9:16 aspect ratio)
-        height: 1280, // Portrait height
-        autoCenter: Phaser.Scale.CENTER_BOTH
+        width: scaleConfig.width,
+        height: scaleConfig.height,
+        autoCenter: scaleConfig.autoCenter
     },
     physics: {
         default: 'arcade',

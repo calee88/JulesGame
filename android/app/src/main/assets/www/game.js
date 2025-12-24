@@ -202,10 +202,20 @@ class GameScene extends Phaser.Scene {
 
         // Game Over
         this.physics.pause();
-        player.setTint(0x555555);
-        this.scoreLabel.setText('GAME OVER\nTap to Restart');
-        this.scoreLabel.setX(this.cameras.main.scrollX + this.scale.width/2 - 100); // Center relative to cam
-        this.scoreLabel.setY(this.scale.height/2);
+        player.setTint(0xff0000); // Red tint for visibility
+
+        // Update and center the score label (it has scrollFactor 0, so use screen coords)
+        this.scoreLabel.setText('GAME OVER\nScore: ' + this.score + '\n\nTap to Restart');
+        this.scoreLabel.setOrigin(0.5); // Center origin
+        this.scoreLabel.setX(this.scale.width / 2);
+        this.scoreLabel.setY(this.scale.height / 2);
+        this.scoreLabel.setStyle({
+            fontSize: '32px',
+            fill: '#ff0000',
+            align: 'center',
+            backgroundColor: '#000000',
+            padding: { x: 20, y: 20 }
+        });
 
         // Restart on touch up (consistent with other button behavior)
         this.input.once('pointerup', () => {

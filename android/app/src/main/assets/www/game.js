@@ -196,9 +196,8 @@ class GameScene extends Phaser.Scene {
         );
 
         // Calculate zoom to maintain consistent view
-        // Target width: 720px (our reference resolution)
         const targetWidth = 720;
-        const zoom = targetWidth / width;  // INVERTED: smaller screens zoom IN
+        const zoom = width / targetWidth;  // Original formula
         this.cameras.main.setZoom(zoom);
     }
 
@@ -208,13 +207,19 @@ class GameScene extends Phaser.Scene {
     }
 
     setupUI(width, height) {
-        this.scoreLabel = this.add.text(10, 10, 'Score: 0', {
-            fontSize: '24px',
+        // Use ratios for positioning so UI scales correctly
+        const scorePosX = width * 0.02;   // 2% from left
+        const scorePosY = height * 0.01;  // 1% from top
+        const fontSize = Math.floor(height * 0.025); // 2.5% of screen height
+
+        this.scoreLabel = this.add.text(scorePosX, scorePosY, 'Score: 0', {
+            fontSize: fontSize + 'px',
             fill: '#fff'
         }).setScrollFactor(0);
 
-        this.modeText = this.add.text(width / 2, 50, 'MODE: PISTOL', {
-            fontSize: '24px',
+        const modePosY = height * 0.05; // 5% from top
+        this.modeText = this.add.text(width / 2, modePosY, 'MODE: PISTOL', {
+            fontSize: fontSize + 'px',
             fill: '#00ff00'
         })
         .setOrigin(0.5)
@@ -534,8 +539,26 @@ class GameScene extends Phaser.Scene {
 
         // Update camera zoom to maintain consistent view
         const targetWidth = 720;
-        const zoom = targetWidth / width;  // INVERTED: smaller screens zoom IN
+        const zoom = width / targetWidth;  // Original formula
         this.cameras.main.setZoom(zoom);
+
+        // Update UI positions with ratios
+        if (this.scoreLabel) {
+            const scorePosX = width * 0.02;
+            const scorePosY = height * 0.01;
+            const fontSize = Math.floor(height * 0.025);
+
+            this.scoreLabel.setPosition(scorePosX, scorePosY);
+            this.scoreLabel.setFontSize(fontSize);
+        }
+
+        if (this.modeText) {
+            const modePosY = height * 0.05;
+            const fontSize = Math.floor(height * 0.025);
+
+            this.modeText.setPosition(width / 2, modePosY);
+            this.modeText.setFontSize(fontSize);
+        }
 
         if (this.zoneAttack) {
             const zoneHeight = height * GAME_CONFIG.ZONE_HEIGHT_RATIO;

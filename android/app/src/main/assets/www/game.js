@@ -7,7 +7,7 @@
 const GAME_CONFIG = {
     // Player
     PLAYER_SPEED: 200,
-    PLAYER_START_X_RATIO: 0.2,
+    PLAYER_START_X_RATIO: 0.5,
     PLAYER_COLOR: 0x00d4ff,
     PLAYER_SIZE: 32,
 
@@ -48,7 +48,7 @@ const GAME_CONFIG = {
     OFFSCREEN_MARGIN: 100,
 
     // Camera
-    CAMERA_FOLLOW_OFFSET_X_RATIO: -0.3,
+    CAMERA_FOLLOW_OFFSET_X_RATIO: 0,
     CAMERA_LERP: 0.1,
 
     // Game Over

@@ -500,7 +500,7 @@ class GameScene extends Phaser.Scene {
      */
     handleEnemyBulletHitPlayer(player, bullet) {
         if (this.isDodging) {
-            bullet.destroy();
+            // Bullet passes through when dodging
             return;
         }
 

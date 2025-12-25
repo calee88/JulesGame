@@ -350,6 +350,11 @@ class GameScene extends Phaser.Scene {
         if (this.isDodging) return;
 
         this.physics.pause();
+
+        // Disable input zones to prevent interactions during game over
+        if (this.zoneAttack) this.zoneAttack.disableInteractive();
+        if (this.zoneDodge) this.zoneDodge.disableInteractive();
+
         this.showGameOverEffects(player);
         this.showGameOverUI();
         this.setupRestart();

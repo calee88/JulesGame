@@ -20,6 +20,7 @@ const GAME_CONFIG = {
     ENEMY_STOP_DISTANCE_MIN: 150,
     ENEMY_STOP_DISTANCE_MAX: 250,
     ENEMY_FIRE_RATE: 1000,
+    ENEMY_CAST_TIME: 500,
     ENEMY_BULLET_SPEED: 400,
     ENEMY_BULLET_COLOR: 0xff6600,
 
@@ -102,6 +103,9 @@ class GameScene extends Phaser.Scene {
         // Targeting System
         this.targetedEnemy = null;
         this.targetIndicator = null;
+
+        // Cast Indicators
+        this.castIndicators = null;
 
         // Swipe Detection State
         this.swipeStartY = 0;
@@ -227,6 +231,9 @@ class GameScene extends Phaser.Scene {
         this.targetIndicator.lineStyle(3, 0xff0000, 1);
         this.targetIndicator.strokeCircle(0, 0, 20);
         this.targetIndicator.setVisible(false);
+
+        // Create a group to hold cast indicators
+        this.castIndicators = this.add.group();
     }
 
     setupUI(width, height) {
@@ -318,21 +325,45 @@ class GameScene extends Phaser.Scene {
                     this.player.x, this.player.y
                 );
 
-                // Shoot at player when within stop distance
+                // Handle shooting with cast time when within stop distance
                 if (distance <= enemy.stopDistance) {
-                    if (time - enemy.lastFired > GAME_CONFIG.ENEMY_FIRE_RATE) {
-                        enemy.lastFired = time;
+                    if (enemy.isCasting) {
+                        // Check if cast is complete
+                        if (time - enemy.castStartTime >= GAME_CONFIG.ENEMY_CAST_TIME) {
+                            // Fire the bullet
+                            const angle = Phaser.Math.Angle.Between(
+                                enemy.x, enemy.y,
+                                this.player.x, this.player.y
+                            );
 
-                        const angle = Phaser.Math.Angle.Between(
-                            enemy.x, enemy.y,
-                            this.player.x, this.player.y
-                        );
+                            const bullet = this.enemyBullets.create(enemy.x, enemy.y, 'enemyBullet');
+                            bullet.setVelocity(
+                                Math.cos(angle) * GAME_CONFIG.ENEMY_BULLET_SPEED,
+                                Math.sin(angle) * GAME_CONFIG.ENEMY_BULLET_SPEED
+                            );
 
-                        const bullet = this.enemyBullets.create(enemy.x, enemy.y, 'enemyBullet');
-                        bullet.setVelocity(
-                            Math.cos(angle) * GAME_CONFIG.ENEMY_BULLET_SPEED,
-                            Math.sin(angle) * GAME_CONFIG.ENEMY_BULLET_SPEED
-                        );
+                            // Reset cast state
+                            enemy.isCasting = false;
+                            enemy.lastFired = time;
+                            enemy.castIndicator.setVisible(false);
+                        } else {
+                            // Update cast indicator position
+                            enemy.castIndicator.setPosition(enemy.x, enemy.y);
+                        }
+                    } else {
+                        // Start casting if ready to fire
+                        if (time - enemy.lastFired > GAME_CONFIG.ENEMY_FIRE_RATE) {
+                            enemy.isCasting = true;
+                            enemy.castStartTime = time;
+                            enemy.castIndicator.setPosition(enemy.x, enemy.y);
+                            enemy.castIndicator.setVisible(true);
+                        }
+                    }
+                } else {
+                    // Cancel cast if moving away
+                    if (enemy.isCasting) {
+                        enemy.isCasting = false;
+                        enemy.castIndicator.setVisible(false);
                     }
                 }
             }
@@ -394,6 +425,9 @@ class GameScene extends Phaser.Scene {
 
         this.enemies.children.each(enemy => {
             if (enemy.active && enemy.x < trailLine) {
+                if (enemy.castIndicator) {
+                    enemy.castIndicator.destroy();
+                }
                 enemy.destroy();
             }
         });
@@ -412,12 +446,22 @@ class GameScene extends Phaser.Scene {
 
         const enemy = this.enemies.create(spawnX, spawnY, 'enemy');
 
-        // Give each enemy a random stop distance and firing timer
+        // Give each enemy a random stop distance and firing/casting state
         enemy.stopDistance = Phaser.Math.Between(
             GAME_CONFIG.ENEMY_STOP_DISTANCE_MIN,
             GAME_CONFIG.ENEMY_STOP_DISTANCE_MAX
         );
         enemy.lastFired = 0;
+        enemy.isCasting = false;
+        enemy.castStartTime = 0;
+
+        // Create cast indicator for this enemy
+        const castIndicator = this.add.graphics();
+        castIndicator.lineStyle(3, 0xffff00, 1);
+        castIndicator.strokeCircle(0, 0, 24);
+        castIndicator.setVisible(false);
+        enemy.castIndicator = castIndicator;
+        this.castIndicators.add(castIndicator);
     }
 
     /**
@@ -473,6 +517,9 @@ class GameScene extends Phaser.Scene {
      */
     handleBulletHitEnemy(bullet, enemy) {
         bullet.destroy();
+        if (enemy.castIndicator) {
+            enemy.castIndicator.destroy();
+        }
         enemy.destroy();
         this.score += GAME_CONFIG.POINTS_PER_KILL;
         this.scoreLabel.setText('Score: ' + this.score);

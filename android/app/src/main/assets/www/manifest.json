@@ -1,0 +1,11 @@
+{
+  "name": "Pistol Mode Game",
+  "short_name": "Pistol Game",
+  "description": "A mobile portrait game",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#000000",
+  "theme_color": "#1a1a2e",
+  "icons": []
+}

@@ -17,6 +17,11 @@ const GAME_CONFIG = {
     ENEMY_COLOR: 0xff0000,
     ENEMY_SIZE: 32,
     ENEMY_SPAWN_MARGIN: 100,
+    ENEMY_STOP_DISTANCE_MIN: 150,
+    ENEMY_STOP_DISTANCE_MAX: 250,
+    ENEMY_FIRE_RATE: 1000,
+    ENEMY_BULLET_SPEED: 400,
+    ENEMY_BULLET_COLOR: 0xff6600,
 
     // Bullet
     BULLET_SPEED: 600,
@@ -108,6 +113,7 @@ class GameScene extends Phaser.Scene {
         this.player = null;
         this.enemies = null;
         this.bullets = null;
+        this.enemyBullets = null;
         this.background = null;
 
         // UI Elements
@@ -125,6 +131,7 @@ class GameScene extends Phaser.Scene {
         this.generatePlayer();
         this.generateEnemy();
         this.generateBullet();
+        this.generateEnemyBullet();
     }
 
     generateBackground() {
@@ -155,6 +162,13 @@ class GameScene extends Phaser.Scene {
         b.fillStyle(GAME_CONFIG.BULLET_COLOR);
         b.fillRect(0, 0, GAME_CONFIG.BULLET_WIDTH, GAME_CONFIG.BULLET_HEIGHT);
         b.generateTexture('bullet', GAME_CONFIG.BULLET_WIDTH, GAME_CONFIG.BULLET_HEIGHT);
+    }
+
+    generateEnemyBullet() {
+        const eb = this.make.graphics({ x: 0, y: 0, add: false });
+        eb.fillStyle(GAME_CONFIG.ENEMY_BULLET_COLOR);
+        eb.fillCircle(6, 6, 6);
+        eb.generateTexture('enemyBullet', 12, 12);
     }
 
     /**
@@ -204,6 +218,7 @@ class GameScene extends Phaser.Scene {
     setupGroups() {
         this.enemies = this.physics.add.group();
         this.bullets = this.physics.add.group();
+        this.enemyBullets = this.physics.add.group();
     }
 
     setupTargetIndicator() {
@@ -237,6 +252,7 @@ class GameScene extends Phaser.Scene {
     setupCollisions() {
         this.physics.add.overlap(this.bullets, this.enemies, this.handleBulletHitEnemy, null, this);
         this.physics.add.overlap(this.player, this.enemies, this.handleEnemyHitPlayer, null, this);
+        this.physics.add.overlap(this.player, this.enemyBullets, this.handleEnemyBulletHitPlayer, null, this);
     }
 
     setupResize() {
@@ -250,6 +266,7 @@ class GameScene extends Phaser.Scene {
         this.updateBackground();
         this.updateEnemySpawning(delta);
         this.updateEnemyMovement();
+        this.updateEnemyShooting(time);
         this.updateTargeting();
         this.cleanupOffscreenObjects();
     }
@@ -269,15 +286,55 @@ class GameScene extends Phaser.Scene {
     updateEnemyMovement() {
         this.enemies.children.each(enemy => {
             if (enemy.active && this.player.active) {
-                const angle = Phaser.Math.Angle.Between(
+                const distance = Phaser.Math.Distance.Between(
                     enemy.x, enemy.y,
                     this.player.x, this.player.y
                 );
 
-                enemy.setVelocity(
-                    Math.cos(angle) * GAME_CONFIG.ENEMY_SPEED,
-                    Math.sin(angle) * GAME_CONFIG.ENEMY_SPEED
+                // Only move if farther than stop distance
+                if (distance > enemy.stopDistance) {
+                    const angle = Phaser.Math.Angle.Between(
+                        enemy.x, enemy.y,
+                        this.player.x, this.player.y
+                    );
+
+                    enemy.setVelocity(
+                        Math.cos(angle) * GAME_CONFIG.ENEMY_SPEED,
+                        Math.sin(angle) * GAME_CONFIG.ENEMY_SPEED
+                    );
+                } else {
+                    // Stop moving when close enough
+                    enemy.setVelocity(0, 0);
+                }
+            }
+        });
+    }
+
+    updateEnemyShooting(time) {
+        this.enemies.children.each(enemy => {
+            if (enemy.active && this.player.active) {
+                const distance = Phaser.Math.Distance.Between(
+                    enemy.x, enemy.y,
+                    this.player.x, this.player.y
                 );
+
+                // Shoot at player when within stop distance
+                if (distance <= enemy.stopDistance) {
+                    if (time - enemy.lastFired > GAME_CONFIG.ENEMY_FIRE_RATE) {
+                        enemy.lastFired = time;
+
+                        const angle = Phaser.Math.Angle.Between(
+                            enemy.x, enemy.y,
+                            this.player.x, this.player.y
+                        );
+
+                        const bullet = this.enemyBullets.create(enemy.x, enemy.y, 'enemyBullet');
+                        bullet.setVelocity(
+                            Math.cos(angle) * GAME_CONFIG.ENEMY_BULLET_SPEED,
+                            Math.sin(angle) * GAME_CONFIG.ENEMY_BULLET_SPEED
+                        );
+                    }
+                }
             }
         });
     }
@@ -329,6 +386,12 @@ class GameScene extends Phaser.Scene {
             }
         });
 
+        this.enemyBullets.children.each(bullet => {
+            if (bullet.active && (bullet.x < trailLine || bullet.x > killLine)) {
+                bullet.destroy();
+            }
+        });
+
         this.enemies.children.each(enemy => {
             if (enemy.active && enemy.x < trailLine) {
                 enemy.destroy();
@@ -347,7 +410,14 @@ class GameScene extends Phaser.Scene {
             cam.height - GAME_CONFIG.ENEMY_SPAWN_MARGIN
         );
 
-        this.enemies.create(spawnX, spawnY, 'enemy');
+        const enemy = this.enemies.create(spawnX, spawnY, 'enemy');
+
+        // Give each enemy a random stop distance and firing timer
+        enemy.stopDistance = Phaser.Math.Between(
+            GAME_CONFIG.ENEMY_STOP_DISTANCE_MIN,
+            GAME_CONFIG.ENEMY_STOP_DISTANCE_MAX
+        );
+        enemy.lastFired = 0;
     }
 
     /**
@@ -414,6 +484,27 @@ class GameScene extends Phaser.Scene {
     handleEnemyHitPlayer(player, enemy) {
         if (this.isDodging) return;
 
+        this.physics.pause();
+
+        // Disable input zones to prevent interactions during game over
+        if (this.zoneAttack) this.zoneAttack.disableInteractive();
+        if (this.zoneDodge) this.zoneDodge.disableInteractive();
+
+        this.showGameOverEffects(player);
+        this.showGameOverUI();
+        this.setupRestart();
+    }
+
+    /**
+     * Handle enemy bullet hitting player (Game Over)
+     */
+    handleEnemyBulletHitPlayer(player, bullet) {
+        if (this.isDodging) {
+            bullet.destroy();
+            return;
+        }
+
+        bullet.destroy();
         this.physics.pause();
 
         // Disable input zones to prevent interactions during game over

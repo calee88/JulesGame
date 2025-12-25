@@ -396,8 +396,12 @@ class GameScene extends Phaser.Scene {
     }
 
     setupRestart() {
-        this.input.once('pointerup', () => {
-            this.scene.restart();
+        // Wait for a fresh tap: pointerdown followed by pointerup
+        // This prevents restart from an ongoing touch that started before game over
+        this.input.once('pointerdown', () => {
+            this.input.once('pointerup', () => {
+                this.scene.restart();
+            });
         });
     }
 

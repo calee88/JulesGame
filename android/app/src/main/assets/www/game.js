@@ -94,6 +94,10 @@ class GameScene extends Phaser.Scene {
         this.modes = ['PISTOL', 'SHIELD', 'SWORD'];
         this.currentModeIndex = 0;
 
+        // Targeting System
+        this.targetedEnemy = null;
+        this.targetIndicator = null;
+
         // Swipe Detection State
         this.swipeStartY = 0;
         this.swipeStartedInBottomQuarter = false;
@@ -163,6 +167,7 @@ class GameScene extends Phaser.Scene {
         this.setupPlayer(width, height);
         this.setupCamera(width);
         this.setupGroups();
+        this.setupTargetIndicator();
         this.setupUI(width, height);
         this.setupInputZones(width, height);
         this.setupCollisions();
@@ -201,6 +206,14 @@ class GameScene extends Phaser.Scene {
         this.bullets = this.physics.add.group();
     }
 
+    setupTargetIndicator() {
+        // Create a red circle graphic to indicate the targeted enemy
+        this.targetIndicator = this.add.graphics();
+        this.targetIndicator.lineStyle(3, 0xff0000, 1);
+        this.targetIndicator.strokeCircle(0, 0, 20);
+        this.targetIndicator.setVisible(false);
+    }
+
     setupUI(width, height) {
         this.scoreLabel = this.add.text(10, 10, 'Score: 0', {
             fontSize: '32px',
@@ -237,6 +250,7 @@ class GameScene extends Phaser.Scene {
         this.updateBackground();
         this.updateEnemySpawning(delta);
         this.updateEnemyMovement();
+        this.updateTargeting();
         this.cleanupOffscreenObjects();
     }
 
@@ -266,6 +280,42 @@ class GameScene extends Phaser.Scene {
                 );
             }
         });
+    }
+
+    updateTargeting() {
+        if (!this.player.active) {
+            this.targetedEnemy = null;
+            this.targetIndicator.setVisible(false);
+            return;
+        }
+
+        // Find the closest enemy
+        let closestEnemy = null;
+        let closestDistance = Infinity;
+
+        this.enemies.children.each(enemy => {
+            if (enemy.active) {
+                const distance = Phaser.Math.Distance.Between(
+                    this.player.x, this.player.y,
+                    enemy.x, enemy.y
+                );
+
+                if (distance < closestDistance) {
+                    closestDistance = distance;
+                    closestEnemy = enemy;
+                }
+            }
+        });
+
+        // Update target and indicator
+        this.targetedEnemy = closestEnemy;
+
+        if (this.targetedEnemy) {
+            this.targetIndicator.setPosition(this.targetedEnemy.x, this.targetedEnemy.y);
+            this.targetIndicator.setVisible(true);
+        } else {
+            this.targetIndicator.setVisible(false);
+        }
     }
 
     cleanupOffscreenObjects() {
@@ -315,7 +365,22 @@ class GameScene extends Phaser.Scene {
             this.player.y,
             'bullet'
         );
-        bullet.setVelocityX(GAME_CONFIG.BULLET_SPEED);
+
+        // Aim at the targeted enemy, or shoot right if no target
+        if (this.targetedEnemy && this.targetedEnemy.active) {
+            const angle = Phaser.Math.Angle.Between(
+                bullet.x, bullet.y,
+                this.targetedEnemy.x, this.targetedEnemy.y
+            );
+
+            bullet.setVelocity(
+                Math.cos(angle) * GAME_CONFIG.BULLET_SPEED,
+                Math.sin(angle) * GAME_CONFIG.BULLET_SPEED
+            );
+        } else {
+            // No target, shoot straight right
+            bullet.setVelocityX(GAME_CONFIG.BULLET_SPEED);
+        }
     }
 
     /**

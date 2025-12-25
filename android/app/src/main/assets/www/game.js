@@ -194,11 +194,6 @@ class GameScene extends Phaser.Scene {
             offsetX,
             0
         );
-
-        // Calculate zoom to maintain consistent view
-        const targetWidth = 720;
-        const zoom = width / targetWidth;
-        this.cameras.main.setZoom(zoom);
     }
 
     setupGroups() {
@@ -531,11 +526,6 @@ class GameScene extends Phaser.Scene {
 
         this.cameras.main.setViewport(0, 0, width, height);
 
-        // Update camera zoom to maintain consistent view
-        const targetWidth = 720;
-        const zoom = width / targetWidth;
-        this.cameras.main.setZoom(zoom);
-
         // Update UI positions
         if (this.scoreLabel) {
             this.scoreLabel.setPosition(10, 10);
@@ -563,34 +553,22 @@ class GameScene extends Phaser.Scene {
 // GAME CONFIGURATION
 // ============================================================================
 
-// Determine scale mode based on aspect ratio
+// FIT mode with fixed width, dynamic height to match screen aspect ratio
 function getScaleConfig() {
     const width = window.innerWidth;
     const height = window.innerHeight;
     const aspectRatio = height / width;
 
-    // Target portrait aspect ratio: 16:9 = 1.78
-    // Accept range: 1.5 to 2.2 (covers most phones in portrait)
-    const MIN_ASPECT = 1.5;  // Wider screens (like tablets in portrait)
-    const MAX_ASPECT = 2.2;  // Taller screens (like 20:9 phones)
+    // Fixed logical width, height calculated from screen aspect ratio
+    const targetWidth = 720;
+    const targetHeight = Math.round(targetWidth * aspectRatio);
 
-    if (aspectRatio >= MIN_ASPECT && aspectRatio <= MAX_ASPECT) {
-        // Screen is portrait-ish, fill it completely
-        // Camera zoom will maintain consistent view
-        return {
-            mode: Phaser.Scale.RESIZE,
-            width: '100%',
-            height: '100%'
-        };
-    } else {
-        // Screen is too wide or too tall, use fixed ratio
-        return {
-            mode: Phaser.Scale.FIT,
-            width: 720,
-            height: 1280,
-            autoCenter: Phaser.Scale.CENTER_BOTH
-        };
-    }
+    return {
+        mode: Phaser.Scale.FIT,
+        width: targetWidth,
+        height: targetHeight,
+        autoCenter: Phaser.Scale.CENTER_BOTH
+    };
 }
 
 const scaleConfig = getScaleConfig();

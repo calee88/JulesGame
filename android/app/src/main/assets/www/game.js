@@ -557,18 +557,29 @@ class GameScene extends Phaser.Scene {
 function getScaleConfig() {
     const width = window.innerWidth;
     const height = window.innerHeight;
-    const aspectRatio = height / width;
-
-    // Fixed logical width, height calculated from screen aspect ratio
     const targetWidth = 720;
-    const targetHeight = Math.round(targetWidth * aspectRatio);
 
-    return {
-        mode: Phaser.Scale.FIT,
-        width: targetWidth,
-        height: targetHeight,
-        autoCenter: Phaser.Scale.CENTER_BOTH
-    };
+    // Check if screen is portrait or landscape
+    if (height > width) {
+        // Portrait screen: dynamic height to match aspect ratio (no black bars)
+        const aspectRatio = height / width;
+        const targetHeight = Math.round(targetWidth * aspectRatio);
+
+        return {
+            mode: Phaser.Scale.FIT,
+            width: targetWidth,
+            height: targetHeight,
+            autoCenter: Phaser.Scale.CENTER_BOTH
+        };
+    } else {
+        // Landscape screen (PC): fixed portrait ratio (with black bars)
+        return {
+            mode: Phaser.Scale.FIT,
+            width: targetWidth,
+            height: 1280,
+            autoCenter: Phaser.Scale.CENTER_BOTH
+        };
+    }
 }
 
 const scaleConfig = getScaleConfig();

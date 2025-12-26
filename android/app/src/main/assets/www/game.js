@@ -306,7 +306,7 @@ class GameScene extends Phaser.Scene {
                     }
                 } else {
                     // Detect incoming bullets and dodge if possible
-                    if (time - enemy.lastDodged > GAME_CONFIG.ENEMY_DODGE_COOLDOWN && !enemy.isCasting) {
+                    if (!enemy.isCasting) {
                         // Check for dangerous bullets
                         let shouldDodge = false;
                         let bulletAngle = 0;
@@ -340,7 +340,6 @@ class GameScene extends Phaser.Scene {
                         if (shouldDodge) {
                             enemy.isDodging = true;
                             enemy.dodgeStartTime = time;
-                            enemy.lastDodged = time;
 
                             // Dodge perpendicular to bullet direction
                             const dodgeAngle = bulletAngle + (Math.random() < 0.5 ? Math.PI / 2 : -Math.PI / 2);

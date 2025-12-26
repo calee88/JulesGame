@@ -23,6 +23,10 @@ const GAME_CONFIG = {
     ENEMY_CAST_TIME: 500,
     ENEMY_BULLET_SPEED: 400,
     ENEMY_BULLET_COLOR: 0xff6600,
+    ENEMY_DODGE_COOLDOWN: 3000,
+    ENEMY_DODGE_DURATION: 300,
+    ENEMY_DODGE_SPEED: 400,
+    ENEMY_DODGE_DISTANCE: 100,
 
     // Bullet
     BULLET_SPEED: 600,
@@ -272,6 +276,7 @@ class GameScene extends Phaser.Scene {
     update(time, delta) {
         this.updateBackground();
         this.updateEnemySpawning(delta);
+        this.updateEnemyDodging(time);
         this.updateEnemyMovement();
         this.updateEnemyShooting(time);
         this.updateTargeting();
@@ -290,28 +295,70 @@ class GameScene extends Phaser.Scene {
         }
     }
 
+    updateEnemyDodging(time) {
+        this.enemies.children.each(enemy => {
+            if (enemy.active && this.player.active) {
+                // Check if dodge duration is over
+                if (enemy.isDodging) {
+                    if (time - enemy.dodgeStartTime >= GAME_CONFIG.ENEMY_DODGE_DURATION) {
+                        enemy.isDodging = false;
+                    }
+                } else {
+                    // Try to start a dodge if cooldown is ready and not casting
+                    if (time - enemy.lastDodged > GAME_CONFIG.ENEMY_DODGE_COOLDOWN && !enemy.isCasting) {
+                        // Random chance to dodge (30% chance when cooldown is ready)
+                        if (Math.random() < 0.3) {
+                            enemy.isDodging = true;
+                            enemy.dodgeStartTime = time;
+                            enemy.lastDodged = time;
+
+                            // Pick a random direction to dodge
+                            const angle = Math.random() * Math.PI * 2;
+                            enemy.dodgeTargetX = enemy.x + Math.cos(angle) * GAME_CONFIG.ENEMY_DODGE_DISTANCE;
+                            enemy.dodgeTargetY = enemy.y + Math.sin(angle) * GAME_CONFIG.ENEMY_DODGE_DISTANCE;
+                        }
+                    }
+                }
+            }
+        });
+    }
+
     updateEnemyMovement() {
         this.enemies.children.each(enemy => {
             if (enemy.active && this.player.active) {
-                const distance = Phaser.Math.Distance.Between(
-                    enemy.x, enemy.y,
-                    this.player.x, this.player.y
-                );
-
-                // Only move if farther than stop distance
-                if (distance > enemy.stopDistance) {
+                // If dodging, move toward dodge target at high speed
+                if (enemy.isDodging) {
                     const angle = Phaser.Math.Angle.Between(
+                        enemy.x, enemy.y,
+                        enemy.dodgeTargetX, enemy.dodgeTargetY
+                    );
+
+                    enemy.setVelocity(
+                        Math.cos(angle) * GAME_CONFIG.ENEMY_DODGE_SPEED,
+                        Math.sin(angle) * GAME_CONFIG.ENEMY_DODGE_SPEED
+                    );
+                } else {
+                    // Normal AI behavior
+                    const distance = Phaser.Math.Distance.Between(
                         enemy.x, enemy.y,
                         this.player.x, this.player.y
                     );
 
-                    enemy.setVelocity(
-                        Math.cos(angle) * GAME_CONFIG.ENEMY_SPEED,
-                        Math.sin(angle) * GAME_CONFIG.ENEMY_SPEED
-                    );
-                } else {
-                    // Stop moving when close enough
-                    enemy.setVelocity(0, 0);
+                    // Only move if farther than stop distance
+                    if (distance > enemy.stopDistance) {
+                        const angle = Phaser.Math.Angle.Between(
+                            enemy.x, enemy.y,
+                            this.player.x, this.player.y
+                        );
+
+                        enemy.setVelocity(
+                            Math.cos(angle) * GAME_CONFIG.ENEMY_SPEED,
+                            Math.sin(angle) * GAME_CONFIG.ENEMY_SPEED
+                        );
+                    } else {
+                        // Stop moving when close enough
+                        enemy.setVelocity(0, 0);
+                    }
                 }
             }
         });
@@ -320,6 +367,15 @@ class GameScene extends Phaser.Scene {
     updateEnemyShooting(time) {
         this.enemies.children.each(enemy => {
             if (enemy.active && this.player.active) {
+                // Cancel cast if dodging
+                if (enemy.isDodging && enemy.isCasting) {
+                    enemy.isCasting = false;
+                    enemy.castIndicator.setVisible(false);
+                }
+
+                // Don't shoot while dodging
+                if (enemy.isDodging) return;
+
                 const distance = Phaser.Math.Distance.Between(
                     enemy.x, enemy.y,
                     this.player.x, this.player.y
@@ -454,6 +510,13 @@ class GameScene extends Phaser.Scene {
         enemy.lastFired = 0;
         enemy.isCasting = false;
         enemy.castStartTime = 0;
+
+        // Dodge state
+        enemy.isDodging = false;
+        enemy.dodgeStartTime = 0;
+        enemy.lastDodged = 0;
+        enemy.dodgeTargetX = 0;
+        enemy.dodgeTargetY = 0;
 
         // Create cast indicator for this enemy
         const castIndicator = this.add.graphics();

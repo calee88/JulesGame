@@ -27,6 +27,7 @@ const GAME_CONFIG = {
     ENEMY_DODGE_DURATION: 300,
     ENEMY_DODGE_SPEED: 400,
     ENEMY_DODGE_DISTANCE: 100,
+    ENEMY_BULLET_DETECTION_RANGE: 200,
 
     // Bullet
     BULLET_SPEED: 600,
@@ -304,18 +305,47 @@ class GameScene extends Phaser.Scene {
                         enemy.isDodging = false;
                     }
                 } else {
-                    // Try to start a dodge if cooldown is ready and not casting
+                    // Detect incoming bullets and dodge if possible
                     if (time - enemy.lastDodged > GAME_CONFIG.ENEMY_DODGE_COOLDOWN && !enemy.isCasting) {
-                        // Random chance to dodge (30% chance when cooldown is ready)
-                        if (Math.random() < 0.3) {
+                        // Check for dangerous bullets
+                        let shouldDodge = false;
+                        let bulletAngle = 0;
+
+                        this.bullets.children.each(bullet => {
+                            if (bullet.active) {
+                                const distance = Phaser.Math.Distance.Between(
+                                    enemy.x, enemy.y,
+                                    bullet.x, bullet.y
+                                );
+
+                                // Check if bullet is within detection range
+                                if (distance < GAME_CONFIG.ENEMY_BULLET_DETECTION_RANGE) {
+                                    // Calculate if bullet is heading toward enemy
+                                    const bulletToEnemy = Phaser.Math.Angle.Between(
+                                        bullet.x, bullet.y,
+                                        enemy.x, enemy.y
+                                    );
+                                    const bulletDirection = Math.atan2(bullet.body.velocity.y, bullet.body.velocity.x);
+                                    const angleDiff = Math.abs(Phaser.Math.Angle.Wrap(bulletToEnemy - bulletDirection));
+
+                                    // If bullet is heading toward enemy (within 45 degrees)
+                                    if (angleDiff < Math.PI / 4) {
+                                        shouldDodge = true;
+                                        bulletAngle = bulletDirection;
+                                    }
+                                }
+                            }
+                        });
+
+                        if (shouldDodge) {
                             enemy.isDodging = true;
                             enemy.dodgeStartTime = time;
                             enemy.lastDodged = time;
 
-                            // Pick a random direction to dodge
-                            const angle = Math.random() * Math.PI * 2;
-                            enemy.dodgeTargetX = enemy.x + Math.cos(angle) * GAME_CONFIG.ENEMY_DODGE_DISTANCE;
-                            enemy.dodgeTargetY = enemy.y + Math.sin(angle) * GAME_CONFIG.ENEMY_DODGE_DISTANCE;
+                            // Dodge perpendicular to bullet direction
+                            const dodgeAngle = bulletAngle + (Math.random() < 0.5 ? Math.PI / 2 : -Math.PI / 2);
+                            enemy.dodgeTargetX = enemy.x + Math.cos(dodgeAngle) * GAME_CONFIG.ENEMY_DODGE_DISTANCE;
+                            enemy.dodgeTargetY = enemy.y + Math.sin(dodgeAngle) * GAME_CONFIG.ENEMY_DODGE_DISTANCE;
                         }
                     }
                 }

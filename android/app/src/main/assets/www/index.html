@@ -11,10 +11,18 @@
         canvas { display: block; }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
-    <script src="https://unpkg.com/easystarjs@0.4.4/bin/easystar.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/easystarjs@0.4.4/bin/easystar.min.js"></script>
 
     <!-- Cache-busting: Increment version when game.js changes -->
     <script src="game.js?v=1766751304"></script>
+
+    <!-- Fallback check for EasyStar -->
+    <script>
+        if (typeof EasyStar === 'undefined') {
+            console.error('EasyStar.js failed to load from CDN. Please check your internet connection.');
+            alert('Failed to load pathfinding library. The game may not work correctly.');
+        }
+    </script>
 </head>
 <body>
 </body>

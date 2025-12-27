@@ -483,7 +483,7 @@ class GameScene extends Phaser.Scene {
         this.easystar.setGrid(this.pathfindingGrid);
         this.easystar.setAcceptableTiles([0]); // 0 is walkable
         this.easystar.enableDiagonals();
-        this.easystar.enableCornerCutting();
+        this.easystar.disableCornerCutting(); // Prevent paths from cutting through wall corners
     }
 
     /**

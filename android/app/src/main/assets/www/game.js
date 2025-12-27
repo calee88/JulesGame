@@ -690,7 +690,23 @@ class GameScene extends Phaser.Scene {
                 target.x, target.y
             );
 
-            if (distance < GAME_CONFIG.PLAYER_ARRIVAL_THRESHOLD) {
+            // Check if we've reached the current waypoint OR if we've passed it
+            // (which can happen when moving diagonally or when blocked by walls)
+            const shouldAdvanceWaypoint = distance < GAME_CONFIG.PLAYER_ARRIVAL_THRESHOLD;
+
+            // Also check if there's a next waypoint and we're closer to it than the current one
+            const skipCurrentWaypoint = this.currentPathIndex < this.playerPath.length - 1 &&
+                (() => {
+                    const nextTarget = this.playerPath[this.currentPathIndex + 1];
+                    const distanceToNext = Phaser.Math.Distance.Between(
+                        this.player.x, this.player.y,
+                        nextTarget.x, nextTarget.y
+                    );
+                    // Skip if we're closer to the next waypoint (indicates we passed or went around current)
+                    return distanceToNext < distance;
+                })();
+
+            if (shouldAdvanceWaypoint || skipCurrentWaypoint) {
                 this.currentPathIndex++;
                 if (this.currentPathIndex >= this.playerPath.length) {
                     // Reached end of path, recalculate

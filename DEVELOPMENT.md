@@ -2,10 +2,11 @@
 
 ## Project Overview
 
-**Genre**: Portrait-oriented mobile bullet hell / action shooter
+**Genre**: Portrait-oriented mobile action RPG / auto-battler (Torchlight-style)
 **Engine**: Phaser 3 (v3.60.0)
 **Target Platform**: Mobile (Android) with PC browser support
 **Orientation**: Portrait (720px fixed width, dynamic height based on aspect ratio)
+**Game Style**: Bounded map with auto-navigation, tactical combat, and reactive enemy AI
 
 ---
 
@@ -45,47 +46,84 @@ These are the core mechanics that make this game distinctive. **Keep these intac
 
 **Why it's special**: Intuitive gesture-based UI instead of buttons.
 
-### 5. **Zone-Based Touch Controls**
-- Screen divided into zones:
-  - **Bottom 25%**: Swipe zone for mode switching
-  - **Middle 25%**: Attack zone (tap to shoot)
-  - **Lower-middle 25%**: Dodge zone (tap to dodge)
-- All triggers on `pointerup` to prevent accidental activation
-- Swipe detection prevents zone actions during gestures
+### 5. **Hybrid Touch Controls**
+- **Visible FIRE button**: Circular button overlay (top-right area) for shooting
+  - Red button with border and label
+  - Visual feedback on press (alpha change)
+  - Preserves auto-targeting system
+- **Dodge zone**: Bottom 25% of screen (tap to dodge)
+  - Flash feedback on activation
+- **Swipe gestures**: Mode switching via up/down swipes
 
-**Why it's special**: Touch-friendly, doesn't obscure screen with virtual joysticks.
+**Why it's special**: Balance between traditional button UI and gesture-based controls.
+
+### 6. **Auto-Navigation with A* Pathfinding**
+- Player automatically walks toward nearest enemy
+- Uses A* algorithm to navigate around walls and obstacles
+- Recalculates path when enemy moves or new target selected
+- Grid-based pathfinding (32px cells) with diagonal movement
+- Smooth movement along waypoints with arrival threshold
+
+**Why it's special**: Intelligent navigation frees player to focus on combat timing.
 
 ---
 
 ## Core Game Mechanics
 
+### Map System
+- **Size**: 3000x2000px bounded world
+- **Format**: JSON-based map data (`map1.json`)
+- **Components**:
+  - Player spawn point
+  - Enemy spawn points with patrol routes
+  - Wall obstacles (collision-enabled)
+- **Rendering**: Tiled floor texture with procedural wall tiles
+- **Camera**: Bounded to map edges, smooth following
+
 ### Player Mechanics
-- **Movement**: Continuous right at 200px/s (auto-runner)
+- **Movement**: Auto-walk to nearest enemy at 180px/s
+  - Uses A* pathfinding to navigate around walls
+  - Recalculates path when target changes
+  - Arrival threshold: 50px
 - **Shooting**: 300ms fire rate, bullets at 600px/s
+  - Manual trigger via FIRE button
+  - Auto-aims at targeted enemy
 - **Dodge**: 500ms duration, 50% alpha (semi-transparent), player invincible during dodge
-- **Position**: Centered on screen (50% x, 50% y)
+  - Activated via bottom screen zone
+- **Collision**: Blocked by walls, world bounds enabled
 
 ### Enemy Mechanics
-- **Spawning**: Every 1500ms at random Y position off-screen right
-- **Movement**:
+- **Spawning**: Pre-placed at map load (no dynamic spawning)
+  - Initial map has 6 enemies
+  - Each enemy has patrol route defined in map data
+- **AI States**:
+  - **Patrol** (default): Move between waypoints at 80px/s
+  - **Aggro** (player within 400px): Full chase/dodge/shoot behavior
+- **Aggro Movement**:
   - Approach player at 150px/s
   - Stop at random distance (150-250px)
-  - Dodge at 400px/s when detecting bullets
-- **Shooting**:
+  - Dodge at 400px/s when detecting bullets (reactive AI)
+- **Shooting** (only when aggro):
   - 1000ms cooldown between shots
   - 500ms cast time with yellow indicator
   - Bullets at 400px/s
 - **Stop Distance**: Randomized per enemy (150-250px) for variety
+
+### Win Condition
+- **Victory**: Kill all enemies on the map
+- **Tracking**: Counts enemies killed vs total spawned
+- **UI**: Green victory screen with score and restart option
 
 ### Dodge System (Player vs Enemy)
 | Feature | Player | Enemy |
 |---------|--------|-------|
 | Trigger | Manual (zone tap) | Automatic (bullet detection) |
 | Visual | Semi-transparent (alpha 0.5) | Position change |
-| Speed | Normal | Fast (400px/s) |
+| Speed | 180px/s (auto-walk) | Fast (400px/s) |
 | Duration | 500ms | 300ms |
 | Cooldown | None | None |
 | During Cast | Can dodge | Cancels cast |
+| Active When | Always | Only when aggro |
 
 ---
 
@@ -117,12 +155,47 @@ Example:
 const GAME_CONFIG = {
     ENEMY_DODGE_SPEED: 400,  // ✓ Good
     ENEMY_CAST_TIME: 500,
+    GRID_SIZE: 32,           // Pathfinding grid cell size
+    ENEMY_AGGRO_RANGE: 400,  // Distance to activate enemy AI
     // ...
 }
 
 // ✗ Bad: enemy.speed = 400
 // ✓ Good: enemy.speed = GAME_CONFIG.ENEMY_DODGE_SPEED
 ```
+
+### Map Data Format
+Maps stored as JSON files in `/www/` directory:
+```json
+{
+  "width": 3000,
+  "height": 2000,
+  "tileSize": 64,
+  "playerStart": { "x": 200, "y": 1000 },
+  "enemies": [
+    {
+      "x": 800,
+      "y": 500,
+      "patrol": [
+        { "x": 800, "y": 500 },
+        { "x": 1000, "y": 500 }
+      ]
+    }
+  ],
+  "walls": [
+    { "x": 600, "y": 400, "width": 200, "height": 400 }
+  ]
+}
+```
+
+### A* Pathfinding System
+- **Grid**: Map divided into 32x32 cells for pathfinding
+- **Algorithm**: A* with Euclidean distance heuristic
+- **Movement**: 8-directional (cardinal + diagonal)
+- **Diagonal cost**: 1.414 (√2) vs 1.0 for cardinal
+- **Obstacle marking**: Walls marked as blocked cells during grid creation
+- **Path recalculation**: Triggers when target moves significantly (> arrival threshold)
+- **Performance**: Optimized for mobile - grid resolution keeps search space small
 
 ### Smart Cache Busting
 - Git pre-commit hook at `.git/hooks/pre-commit`
@@ -177,6 +250,9 @@ All assets procedurally generated (no image files):
 - Enemy Bullet: 12x12 orange circle
 - Target Indicator: Red circle outline (20px radius)
 - Cast Indicator: Yellow circle outline (24px radius)
+- Floor: 64x64 dark purple tile with grid lines
+- Wall: 64x64 gray-purple tile with border
+- Fire Button: Red circle with border and text label
 
 ---
 
@@ -193,19 +269,26 @@ All assets procedurally generated (no image files):
 - Uses `setScrollFactor(0)` to prevent camera movement affecting UI
 
 ### Performance Optimizations
-- Cleanup offscreen objects (bullets, enemies) with margin of 100px
+- Cleanup bullets outside world bounds
 - Destroy cast indicators when enemies destroyed
 - Physics debug mode disabled in production
+- Static map rendering (no infinite scroll updates)
+- Grid-based pathfinding reduces search space
+- Path recalculation throttled by arrival threshold
+- Wall collisions handled by physics engine (static group)
 
 ---
 
 ## Known Behaviors (Not Bugs)
 
-1. **Enemies dodge even when far away**: By design - they react to any bullet within 200px detection range
+1. **Enemies dodge only when aggro**: By design - they only react to bullets when player is within 400px
 2. **Cast indicators move with enemies**: Intentional - indicator follows enemy during cast
-3. **Player always moves right**: Auto-runner mechanic, not a constraint
+3. **Player auto-walks to enemies**: Auto-battler mechanic - player automatically navigates to nearest enemy
 4. **Bullets aim at last known position**: Bullets don't track, they're fired at angle toward target at fire time
 5. **Dodge has no cooldown**: Design choice for skill-based gameplay
+6. **Enemies patrol when player far away**: Intentional - enemies are idle/patrolling until player gets close
+7. **Path recalculation**: Player may take new paths when enemy moves - this is normal A* behavior
+8. **Camera stops at edges**: Bounded camera prevents showing areas outside the map
 
 ---
 
@@ -218,12 +301,16 @@ Current architecture supports mode switching, but only PISTOL implemented:
 - Mode text updates on swipe
 
 ### Potential Improvements
-- **Enemy variety**: Different enemy types (fast, tanky, etc.)
-- **Power-ups**: Temporary buffs
-- **Boss fights**: Large enemies with patterns
-- **Difficulty scaling**: Increase spawn rate / enemy speed over time
-- **Score multipliers**: Combo system for consecutive kills
+- **Multiple maps**: Create map2.json, map3.json with increasing difficulty
+- **Procedural map generation**: Randomly generate maps at runtime
+- **Enemy variety**: Different enemy types (fast, tanky, ranged, melee)
+- **Power-ups**: Temporary buffs dropped by enemies
+- **Boss fights**: Large enemies with complex patterns
+- **Loot system**: Item drops and equipment
+- **Level progression**: Unlock new maps after completing previous ones
+- **Player upgrades**: Permanent stat improvements
 - **Particle effects**: Visual polish for hits, dodges, deaths
+- **Minimap**: Show full map in corner with player/enemy positions
 
 ### Architecture Strengths
 - **Modular design**: Each system in separate methods
@@ -238,13 +325,21 @@ Current architecture supports mode switching, but only PISTOL implemented:
 Before deploying changes:
 - [ ] Test on mobile (portrait)
 - [ ] Test on PC (landscape)
-- [ ] Verify enemy dodge (shoot and observe)
-- [ ] Verify cast indicators appear
-- [ ] Verify player dodge works (try getting hit during dodge)
-- [ ] Verify game over restart (test bottom-quarter tap)
-- [ ] Verify mode switching (swipe up/down)
-- [ ] Verify auto-targeting (red circle on nearest enemy)
-- [ ] Verify cache busting (version parameter updates)
+- [ ] **Verify auto-walk**: Player automatically paths to nearest enemy
+- [ ] **Verify pathfinding**: Player navigates around walls correctly
+- [ ] **Verify FIRE button**: Visible button shoots when pressed
+- [ ] **Verify enemy patrol**: Enemies patrol when player far away
+- [ ] **Verify enemy aggro**: Enemies activate when player within 400px
+- [ ] **Verify enemy dodge**: Enemies dodge bullets when aggro (reactive AI)
+- [ ] **Verify cast indicators**: Yellow circles appear before enemy shoots
+- [ ] **Verify player dodge**: Invincibility works during dodge
+- [ ] **Verify win condition**: Victory screen appears after killing all enemies
+- [ ] **Verify game over restart**: Tap to restart works
+- [ ] **Verify mode switching**: Swipe up/down still works
+- [ ] **Verify auto-targeting**: Red circle on nearest enemy
+- [ ] **Verify wall collisions**: Player and enemies blocked by walls
+- [ ] **Verify camera bounds**: Camera stops at map edges
+- [ ] **Verify cache busting**: Version parameter updates
 
 ---
 
@@ -264,16 +359,21 @@ Before deploying changes:
 ## Contact / Inspiration
 
 **Similar games for reference**:
+- **Torchlight**: Click-to-move action RPG (inspiration for auto-walk)
+- **Diablo**: Top-down ARPG with auto-navigation
 - **Archero**: Auto-aim, dodge-focused
 - **Magic Survival**: Bullet hell with auto-targeting
 - **Soul Knight**: Bullet hell roguelike
 
 **Unique selling points**:
-1. Enemies that dodge your bullets reactively
-2. Cast time telegraph system
-3. Mobile-optimized gesture controls
-4. Simple but deep combat mechanics
+1. **Auto-battler meets bullet hell**: Automatic navigation + manual combat timing
+2. **Reactive enemy AI**: Enemies dodge your bullets intelligently
+3. **Cast time telegraph system**: Visual warnings before enemy attacks
+4. **A* pathfinding**: Intelligent navigation around obstacles
+5. **Hybrid control scheme**: Auto-movement + manual shooting/dodging
+6. **Bounded maps with victory condition**: Complete stages, not endless survival
+7. **Enemy patrol/aggro AI**: Dynamic enemy behavior based on distance
 
 ---
 
-*Last updated: 2024*
+*Last updated: January 2025 - Torchlight-style auto-battler redesign*

@@ -442,6 +442,10 @@ class GameScene extends Phaser.Scene {
      * A* Pathfinding: Find path from start to goal
      */
     findPath(startX, startY, goalX, goalY) {
+        if (!this.pathfindingGrid || this.pathfindingGrid.length === 0) {
+            return null;
+        }
+
         // Convert world coordinates to grid coordinates
         const startGridX = Math.floor(startX / GAME_CONFIG.GRID_SIZE);
         const startGridY = Math.floor(startY / GAME_CONFIG.GRID_SIZE);
@@ -572,6 +576,8 @@ class GameScene extends Phaser.Scene {
      * Cleanup bullets that are out of bounds
      */
     cleanupBullets() {
+        if (!this.mapData) return;
+
         // Remove bullets outside world bounds
         this.bullets.children.each(bullet => {
             if (bullet.active) {
@@ -987,8 +993,12 @@ class GameScene extends Phaser.Scene {
         this.physics.pause();
 
         // Disable input zones to prevent interactions during victory
-        if (this.zoneAttack) this.zoneAttack.disableInteractive();
-        if (this.zoneDodge) this.zoneDodge.disableInteractive();
+        if (this.zoneAttack) {
+            this.zoneAttack.disableInteractive();
+        }
+        if (this.zoneDodge) {
+            this.zoneDodge.disableInteractive();
+        }
 
         this.showVictoryUI();
         this.setupRestart();
@@ -1017,8 +1027,12 @@ class GameScene extends Phaser.Scene {
         this.physics.pause();
 
         // Disable input zones to prevent interactions during game over
-        if (this.zoneAttack) this.zoneAttack.disableInteractive();
-        if (this.zoneDodge) this.zoneDodge.disableInteractive();
+        if (this.zoneAttack) {
+            this.zoneAttack.disableInteractive();
+        }
+        if (this.zoneDodge) {
+            this.zoneDodge.disableInteractive();
+        }
 
         this.showGameOverEffects(player);
         this.showGameOverUI();
@@ -1038,8 +1052,12 @@ class GameScene extends Phaser.Scene {
         this.physics.pause();
 
         // Disable input zones to prevent interactions during game over
-        if (this.zoneAttack) this.zoneAttack.disableInteractive();
-        if (this.zoneDodge) this.zoneDodge.disableInteractive();
+        if (this.zoneAttack) {
+            this.zoneAttack.disableInteractive();
+        }
+        if (this.zoneDodge) {
+            this.zoneDodge.disableInteractive();
+        }
 
         this.showGameOverEffects(player);
         this.showGameOverUI();

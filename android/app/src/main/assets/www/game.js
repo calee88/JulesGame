@@ -70,6 +70,18 @@ const GAME_CONFIG = {
     BACKGROUND_SIZE: 64,
     BACKGROUND_COLOR: 0x1a1a2e,
     BACKGROUND_GRID_COLOR: 0x0f3460,
+    FLOOR_COLOR: 0x2a2a3e,
+    WALL_COLOR: 0x4a4a6e,
+
+    // Map
+    MAP_FILE: 'map1.json',
+    GRID_SIZE: 32, // Size of pathfinding grid cells
+    ENEMY_AGGRO_RANGE: 400, // Distance at which enemies activate chase/dodge/shoot
+    ENEMY_PATROL_SPEED: 80,
+
+    // Auto-walk
+    PLAYER_AUTO_WALK_SPEED: 180,
+    PLAYER_ARRIVAL_THRESHOLD: 50, // Distance to consider "arrived" at destination
 
     // Zone Flash
     ZONE_FLASH_DURATION: 200,
@@ -118,6 +130,20 @@ class GameScene extends Phaser.Scene {
         this.swipeStartedAboveThreshold = false;
         this.isSwipeGesture = false;
 
+        // Map System
+        this.mapData = null;
+        this.walls = null;
+        this.pathfindingGrid = null;
+
+        // Auto-walk System
+        this.playerDestination = null;
+        this.playerPath = null;
+        this.currentPathIndex = 0;
+
+        // Win Condition
+        this.totalEnemies = 0;
+        this.enemiesKilled = 0;
+
         // Game Objects
         this.player = null;
         this.enemies = null;
@@ -141,6 +167,11 @@ class GameScene extends Phaser.Scene {
         this.generateEnemy();
         this.generateBullet();
         this.generateEnemyBullet();
+        this.generateWall();
+        this.generateFloor();
+
+        // Load map data
+        this.load.json('mapData', GAME_CONFIG.MAP_FILE);
     }
 
     generateBackground() {
@@ -180,17 +211,44 @@ class GameScene extends Phaser.Scene {
         eb.generateTexture('enemyBullet', 12, 12);
     }
 
+    generateWall() {
+        const w = this.make.graphics({ x: 0, y: 0, add: false });
+        w.fillStyle(GAME_CONFIG.WALL_COLOR);
+        w.fillRect(0, 0, 64, 64);
+        w.lineStyle(2, 0x6a6a8e, 1);
+        w.strokeRect(0, 0, 64, 64);
+        w.generateTexture('wall', 64, 64);
+    }
+
+    generateFloor() {
+        const f = this.make.graphics({ x: 0, y: 0, add: false });
+        f.fillStyle(GAME_CONFIG.FLOOR_COLOR);
+        f.fillRect(0, 0, 64, 64);
+        f.lineStyle(1, GAME_CONFIG.BACKGROUND_GRID_COLOR, 0.3);
+        f.strokeRect(0, 0, 64, 64);
+        f.generateTexture('floor', 64, 64);
+    }
+
     /**
      * Create: Initialize game objects and setup
      */
     create() {
         const { width, height } = this.scale;
 
+        // Load map data
+        this.mapData = this.cache.json.get('mapData');
+
+        // Set world bounds to map size
+        this.physics.world.setBounds(0, 0, this.mapData.width, this.mapData.height);
+
         this.setupBackground(width, height);
+        this.createMap();
+        this.createPathfindingGrid();
         this.setupPlayer(width, height);
         this.setupCamera(width);
         this.setupGroups();
         this.setupTargetIndicator();
+        this.spawnAllEnemies();
         this.setupUI(width, height);
         this.setupInputZones(width, height);
         this.setupCollisions();
@@ -198,28 +256,59 @@ class GameScene extends Phaser.Scene {
     }
 
     setupBackground(width, height) {
-        this.background = this.add.tileSprite(0, 0, width, height, 'background')
-            .setOrigin(0)
-            .setScrollFactor(0);
+        // Create floor covering the entire map
+        this.background = this.add.tileSprite(
+            0, 0,
+            this.mapData.width,
+            this.mapData.height,
+            'floor'
+        ).setOrigin(0);
+    }
+
+    createMap() {
+        // Create walls group with physics
+        this.walls = this.physics.add.staticGroup();
+
+        // Create wall objects from map data
+        this.mapData.walls.forEach(wallData => {
+            // Calculate how many tiles we need
+            const tilesX = Math.ceil(wallData.width / 64);
+            const tilesY = Math.ceil(wallData.height / 64);
+
+            // Create tiles to fill the wall area
+            for (let x = 0; x < tilesX; x++) {
+                for (let y = 0; y < tilesY; y++) {
+                    const wall = this.walls.create(
+                        wallData.x + x * 64 + 32,
+                        wallData.y + y * 64 + 32,
+                        'wall'
+                    );
+                }
+            }
+        });
     }
 
     setupPlayer(width, height) {
-        const startX = width * GAME_CONFIG.PLAYER_START_X_RATIO;
-        const startY = height / 2;
+        // Use map data for player start position
+        const startX = this.mapData.playerStart.x;
+        const startY = this.mapData.playerStart.y;
 
         this.player = this.physics.add.sprite(startX, startY, 'player');
-        this.player.setCollideWorldBounds(false);
-        this.player.setVelocityX(GAME_CONFIG.PLAYER_SPEED);
+        this.player.setCollideWorldBounds(true);
+        // No auto-velocity - player will auto-walk to enemies
     }
 
     setupCamera(width) {
-        const offsetX = width * GAME_CONFIG.CAMERA_FOLLOW_OFFSET_X_RATIO;
+        // Set camera bounds to map size
+        this.cameras.main.setBounds(0, 0, this.mapData.width, this.mapData.height);
+
+        // Follow player with smooth lerp
         this.cameras.main.startFollow(
             this.player,
             true,
             GAME_CONFIG.CAMERA_LERP,
             GAME_CONFIG.CAMERA_LERP,
-            offsetX,
+            0,
             0
         );
     }
@@ -265,6 +354,12 @@ class GameScene extends Phaser.Scene {
         this.physics.add.overlap(this.bullets, this.enemies, this.handleBulletHitEnemy, null, this);
         this.physics.add.overlap(this.player, this.enemies, this.handleEnemyHitPlayer, null, this);
         this.physics.add.overlap(this.player, this.enemyBullets, this.handleEnemyBulletHitPlayer, null, this);
+
+        // Add wall collisions
+        this.physics.add.collider(this.player, this.walls);
+        this.physics.add.collider(this.enemies, this.walls);
+        this.physics.add.collider(this.bullets, this.walls, (bullet, wall) => bullet.destroy());
+        this.physics.add.collider(this.enemyBullets, this.walls, (bullet, wall) => bullet.destroy());
     }
 
     setupResize() {
@@ -272,33 +367,336 @@ class GameScene extends Phaser.Scene {
     }
 
     /**
+     * Create pathfinding grid
+     */
+    createPathfindingGrid() {
+        const gridWidth = Math.ceil(this.mapData.width / GAME_CONFIG.GRID_SIZE);
+        const gridHeight = Math.ceil(this.mapData.height / GAME_CONFIG.GRID_SIZE);
+
+        // Initialize grid with all walkable cells
+        this.pathfindingGrid = [];
+        for (let y = 0; y < gridHeight; y++) {
+            this.pathfindingGrid[y] = [];
+            for (let x = 0; x < gridWidth; x++) {
+                this.pathfindingGrid[y][x] = 0; // 0 = walkable, 1 = blocked
+            }
+        }
+
+        // Mark wall cells as blocked
+        this.mapData.walls.forEach(wall => {
+            const startX = Math.floor(wall.x / GAME_CONFIG.GRID_SIZE);
+            const startY = Math.floor(wall.y / GAME_CONFIG.GRID_SIZE);
+            const endX = Math.ceil((wall.x + wall.width) / GAME_CONFIG.GRID_SIZE);
+            const endY = Math.ceil((wall.y + wall.height) / GAME_CONFIG.GRID_SIZE);
+
+            for (let y = startY; y < endY && y < gridHeight; y++) {
+                for (let x = startX; x < endX && x < gridWidth; x++) {
+                    this.pathfindingGrid[y][x] = 1;
+                }
+            }
+        });
+    }
+
+    /**
+     * Spawn all enemies from map data
+     */
+    spawnAllEnemies() {
+        this.totalEnemies = this.mapData.enemies.length;
+        this.enemiesKilled = 0;
+
+        this.mapData.enemies.forEach(enemyData => {
+            const enemy = this.enemies.create(enemyData.x, enemyData.y, 'enemy');
+
+            // Give each enemy a random stop distance and firing/casting state
+            enemy.stopDistance = Phaser.Math.Between(
+                GAME_CONFIG.ENEMY_STOP_DISTANCE_MIN,
+                GAME_CONFIG.ENEMY_STOP_DISTANCE_MAX
+            );
+            enemy.lastFired = 0;
+            enemy.isCasting = false;
+            enemy.castStartTime = 0;
+
+            // Dodge state
+            enemy.isDodging = false;
+            enemy.dodgeStartTime = 0;
+            enemy.lastDodged = 0;
+            enemy.dodgeTargetX = 0;
+            enemy.dodgeTargetY = 0;
+
+            // Patrol state
+            enemy.isAggro = false;
+            enemy.patrolPoints = enemyData.patrol || [{ x: enemyData.x, y: enemyData.y }];
+            enemy.currentPatrolIndex = 0;
+
+            // Create cast indicator for this enemy
+            const castIndicator = this.add.graphics();
+            castIndicator.lineStyle(3, 0xffff00, 1);
+            castIndicator.strokeCircle(0, 0, 24);
+            castIndicator.setVisible(false);
+            enemy.castIndicator = castIndicator;
+            this.castIndicators.add(castIndicator);
+        });
+    }
+
+    /**
+     * A* Pathfinding: Find path from start to goal
+     */
+    findPath(startX, startY, goalX, goalY) {
+        // Convert world coordinates to grid coordinates
+        const startGridX = Math.floor(startX / GAME_CONFIG.GRID_SIZE);
+        const startGridY = Math.floor(startY / GAME_CONFIG.GRID_SIZE);
+        const goalGridX = Math.floor(goalX / GAME_CONFIG.GRID_SIZE);
+        const goalGridY = Math.floor(goalY / GAME_CONFIG.GRID_SIZE);
+
+        const gridHeight = this.pathfindingGrid.length;
+        const gridWidth = this.pathfindingGrid[0].length;
+
+        // Check if goal is valid
+        if (goalGridX < 0 || goalGridX >= gridWidth || goalGridY < 0 || goalGridY >= gridHeight) {
+            return null;
+        }
+        if (this.pathfindingGrid[goalGridY][goalGridX] === 1) {
+            return null; // Goal is blocked
+        }
+
+        // A* algorithm
+        const openSet = [{ x: startGridX, y: startGridY }];
+        const cameFrom = {};
+        const gScore = {};
+        const fScore = {};
+
+        const key = (x, y) => `${x},${y}`;
+        gScore[key(startGridX, startGridY)] = 0;
+        fScore[key(startGridX, startGridY)] = this.heuristic(startGridX, startGridY, goalGridX, goalGridY);
+
+        while (openSet.length > 0) {
+            // Find node with lowest fScore
+            let current = openSet[0];
+            let currentIndex = 0;
+            for (let i = 1; i < openSet.length; i++) {
+                if (fScore[key(openSet[i].x, openSet[i].y)] < fScore[key(current.x, current.y)]) {
+                    current = openSet[i];
+                    currentIndex = i;
+                }
+            }
+
+            // Check if we reached the goal
+            if (current.x === goalGridX && current.y === goalGridY) {
+                return this.reconstructPath(cameFrom, current, startGridX, startGridY);
+            }
+
+            openSet.splice(currentIndex, 1);
+
+            // Check all neighbors
+            const neighbors = [
+                { x: current.x + 1, y: current.y },
+                { x: current.x - 1, y: current.y },
+                { x: current.x, y: current.y + 1 },
+                { x: current.x, y: current.y - 1 },
+                // Diagonals
+                { x: current.x + 1, y: current.y + 1 },
+                { x: current.x + 1, y: current.y - 1 },
+                { x: current.x - 1, y: current.y + 1 },
+                { x: current.x - 1, y: current.y - 1 }
+            ];
+
+            for (const neighbor of neighbors) {
+                // Check bounds
+                if (neighbor.x < 0 || neighbor.x >= gridWidth || neighbor.y < 0 || neighbor.y >= gridHeight) {
+                    continue;
+                }
+
+                // Check if walkable
+                if (this.pathfindingGrid[neighbor.y][neighbor.x] === 1) {
+                    continue;
+                }
+
+                // Calculate tentative gScore
+                const isDiagonal = neighbor.x !== current.x && neighbor.y !== current.y;
+                const moveCost = isDiagonal ? 1.414 : 1;
+                const tentativeGScore = gScore[key(current.x, current.y)] + moveCost;
+
+                const neighborKey = key(neighbor.x, neighbor.y);
+                if (gScore[neighborKey] === undefined || tentativeGScore < gScore[neighborKey]) {
+                    cameFrom[neighborKey] = current;
+                    gScore[neighborKey] = tentativeGScore;
+                    fScore[neighborKey] = gScore[neighborKey] + this.heuristic(neighbor.x, neighbor.y, goalGridX, goalGridY);
+
+                    // Add to openSet if not already there
+                    if (!openSet.some(node => node.x === neighbor.x && node.y === neighbor.y)) {
+                        openSet.push(neighbor);
+                    }
+                }
+            }
+        }
+
+        return null; // No path found
+    }
+
+    heuristic(x1, y1, x2, y2) {
+        // Euclidean distance
+        return Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
+    }
+
+    reconstructPath(cameFrom, current, startX, startY) {
+        const path = [];
+        const key = (x, y) => `${x},${y}`;
+
+        while (key(current.x, current.y) !== key(startX, startY)) {
+            // Convert grid coordinates back to world coordinates (center of cell)
+            path.unshift({
+                x: current.x * GAME_CONFIG.GRID_SIZE + GAME_CONFIG.GRID_SIZE / 2,
+                y: current.y * GAME_CONFIG.GRID_SIZE + GAME_CONFIG.GRID_SIZE / 2
+            });
+            current = cameFrom[key(current.x, current.y)];
+            if (!current) break;
+        }
+
+        return path;
+    }
+
+    /**
      * Update: Main game loop
      */
     update(time, delta) {
-        this.updateBackground();
-        this.updateEnemySpawning(delta);
+        this.updatePlayerAutoWalk();
+        this.updateEnemyAggro();
         this.updateEnemyDodging(time);
         this.updateEnemyMovement();
         this.updateEnemyShooting(time);
         this.updateTargeting();
-        this.cleanupOffscreenObjects();
+        this.cleanupBullets();
     }
 
-    updateBackground() {
-        this.background.tilePositionX = this.cameras.main.scrollX;
+    /**
+     * Cleanup bullets that are out of bounds
+     */
+    cleanupBullets() {
+        // Remove bullets outside world bounds
+        this.bullets.children.each(bullet => {
+            if (bullet.active) {
+                if (bullet.x < 0 || bullet.x > this.mapData.width ||
+                    bullet.y < 0 || bullet.y > this.mapData.height) {
+                    bullet.destroy();
+                }
+            }
+        });
+
+        this.enemyBullets.children.each(bullet => {
+            if (bullet.active) {
+                if (bullet.x < 0 || bullet.x > this.mapData.width ||
+                    bullet.y < 0 || bullet.y > this.mapData.height) {
+                    bullet.destroy();
+                }
+            }
+        });
     }
 
-    updateEnemySpawning(delta) {
-        this.spawnTimer += delta;
-        if (this.spawnTimer > GAME_CONFIG.ENEMY_SPAWN_INTERVAL) {
-            this.spawnEnemy();
-            this.spawnTimer = 0;
+    /**
+     * Auto-walk player to nearest enemy
+     */
+    updatePlayerAutoWalk() {
+        if (!this.player.active) return;
+
+        // Find nearest enemy
+        let nearestEnemy = null;
+        let nearestDistance = Infinity;
+
+        this.enemies.children.each(enemy => {
+            if (enemy.active) {
+                const distance = Phaser.Math.Distance.Between(
+                    this.player.x, this.player.y,
+                    enemy.x, enemy.y
+                );
+
+                if (distance < nearestDistance) {
+                    nearestDistance = distance;
+                    nearestEnemy = enemy;
+                }
+            }
+        });
+
+        if (!nearestEnemy) {
+            this.player.setVelocity(0, 0);
+            return;
         }
+
+        // Check if we need a new path
+        if (!this.playerPath || !this.playerDestination ||
+            Phaser.Math.Distance.Between(
+                this.playerDestination.x, this.playerDestination.y,
+                nearestEnemy.x, nearestEnemy.y
+            ) > GAME_CONFIG.PLAYER_ARRIVAL_THRESHOLD) {
+
+            // Set new destination and find path
+            this.playerDestination = { x: nearestEnemy.x, y: nearestEnemy.y };
+            this.playerPath = this.findPath(
+                this.player.x, this.player.y,
+                this.playerDestination.x, this.playerDestination.y
+            );
+            this.currentPathIndex = 0;
+        }
+
+        // Follow path
+        if (this.playerPath && this.playerPath.length > 0) {
+            const target = this.playerPath[this.currentPathIndex];
+            const distance = Phaser.Math.Distance.Between(
+                this.player.x, this.player.y,
+                target.x, target.y
+            );
+
+            if (distance < GAME_CONFIG.PLAYER_ARRIVAL_THRESHOLD) {
+                this.currentPathIndex++;
+                if (this.currentPathIndex >= this.playerPath.length) {
+                    // Reached end of path, recalculate
+                    this.playerPath = null;
+                }
+            } else {
+                // Move toward current waypoint
+                const angle = Phaser.Math.Angle.Between(
+                    this.player.x, this.player.y,
+                    target.x, target.y
+                );
+
+                this.player.setVelocity(
+                    Math.cos(angle) * GAME_CONFIG.PLAYER_AUTO_WALK_SPEED,
+                    Math.sin(angle) * GAME_CONFIG.PLAYER_AUTO_WALK_SPEED
+                );
+            }
+        } else {
+            // No path, try to move directly (shouldn't happen often)
+            const angle = Phaser.Math.Angle.Between(
+                this.player.x, this.player.y,
+                nearestEnemy.x, nearestEnemy.y
+            );
+
+            this.player.setVelocity(
+                Math.cos(angle) * GAME_CONFIG.PLAYER_AUTO_WALK_SPEED,
+                Math.sin(angle) * GAME_CONFIG.PLAYER_AUTO_WALK_SPEED
+            );
+        }
+    }
+
+    /**
+     * Update enemy aggro state based on player distance
+     */
+    updateEnemyAggro() {
+        this.enemies.children.each(enemy => {
+            if (enemy.active && this.player.active) {
+                const distance = Phaser.Math.Distance.Between(
+                    enemy.x, enemy.y,
+                    this.player.x, this.player.y
+                );
+
+                // Activate aggro if player is within range
+                enemy.isAggro = distance <= GAME_CONFIG.ENEMY_AGGRO_RANGE;
+            }
+        });
     }
 
     updateEnemyDodging(time) {
         this.enemies.children.each(enemy => {
-            if (enemy.active && this.player.active) {
+            if (enemy.active && this.player.active && enemy.isAggro) {
                 // Check if dodge duration is over
                 if (enemy.isDodging) {
                     if (time - enemy.dodgeStartTime >= GAME_CONFIG.ENEMY_DODGE_DURATION) {
@@ -354,7 +752,7 @@ class GameScene extends Phaser.Scene {
 
     updateEnemyMovement() {
         this.enemies.children.each(enemy => {
-            if (enemy.active && this.player.active) {
+            if (enemy.active) {
                 // If dodging, move toward dodge target at high speed
                 if (enemy.isDodging) {
                     const angle = Phaser.Math.Angle.Between(
@@ -366,8 +764,8 @@ class GameScene extends Phaser.Scene {
                         Math.cos(angle) * GAME_CONFIG.ENEMY_DODGE_SPEED,
                         Math.sin(angle) * GAME_CONFIG.ENEMY_DODGE_SPEED
                     );
-                } else {
-                    // Normal AI behavior
+                } else if (enemy.isAggro && this.player.active) {
+                    // Aggro: Chase player
                     const distance = Phaser.Math.Distance.Between(
                         enemy.x, enemy.y,
                         this.player.x, this.player.y
@@ -388,6 +786,29 @@ class GameScene extends Phaser.Scene {
                         // Stop moving when close enough
                         enemy.setVelocity(0, 0);
                     }
+                } else {
+                    // Patrol behavior
+                    const patrolTarget = enemy.patrolPoints[enemy.currentPatrolIndex];
+                    const distance = Phaser.Math.Distance.Between(
+                        enemy.x, enemy.y,
+                        patrolTarget.x, patrolTarget.y
+                    );
+
+                    if (distance < 10) {
+                        // Reached patrol point, move to next
+                        enemy.currentPatrolIndex = (enemy.currentPatrolIndex + 1) % enemy.patrolPoints.length;
+                    } else {
+                        // Move toward patrol point
+                        const angle = Phaser.Math.Angle.Between(
+                            enemy.x, enemy.y,
+                            patrolTarget.x, patrolTarget.y
+                        );
+
+                        enemy.setVelocity(
+                            Math.cos(angle) * GAME_CONFIG.ENEMY_PATROL_SPEED,
+                            Math.sin(angle) * GAME_CONFIG.ENEMY_PATROL_SPEED
+                        );
+                    }
                 }
             }
         });
@@ -395,7 +816,7 @@ class GameScene extends Phaser.Scene {
 
     updateEnemyShooting(time) {
         this.enemies.children.each(enemy => {
-            if (enemy.active && this.player.active) {
+            if (enemy.active && this.player.active && enemy.isAggro) {
                 // Cancel cast if dodging
                 if (enemy.isDodging && enemy.isCasting) {
                     enemy.isCasting = false;
@@ -491,70 +912,6 @@ class GameScene extends Phaser.Scene {
         }
     }
 
-    cleanupOffscreenObjects() {
-        const cam = this.cameras.main;
-        const killLine = cam.scrollX + this.scale.width + GAME_CONFIG.OFFSCREEN_MARGIN;
-        const trailLine = cam.scrollX - GAME_CONFIG.OFFSCREEN_MARGIN;
-
-        this.bullets.children.each(bullet => {
-            if (bullet.active && bullet.x > killLine) {
-                bullet.destroy();
-            }
-        });
-
-        this.enemyBullets.children.each(bullet => {
-            if (bullet.active && (bullet.x < trailLine || bullet.x > killLine)) {
-                bullet.destroy();
-            }
-        });
-
-        this.enemies.children.each(enemy => {
-            if (enemy.active && enemy.x < trailLine) {
-                if (enemy.castIndicator) {
-                    enemy.castIndicator.destroy();
-                }
-                enemy.destroy();
-            }
-        });
-    }
-
-    /**
-     * Spawn an enemy off-screen
-     */
-    spawnEnemy() {
-        const cam = this.cameras.main;
-        const spawnX = cam.scrollX + cam.width + GAME_CONFIG.ENEMY_SPAWN_MARGIN;
-        const spawnY = Phaser.Math.Between(
-            GAME_CONFIG.ENEMY_SPAWN_MARGIN,
-            cam.height - GAME_CONFIG.ENEMY_SPAWN_MARGIN
-        );
-
-        const enemy = this.enemies.create(spawnX, spawnY, 'enemy');
-
-        // Give each enemy a random stop distance and firing/casting state
-        enemy.stopDistance = Phaser.Math.Between(
-            GAME_CONFIG.ENEMY_STOP_DISTANCE_MIN,
-            GAME_CONFIG.ENEMY_STOP_DISTANCE_MAX
-        );
-        enemy.lastFired = 0;
-        enemy.isCasting = false;
-        enemy.castStartTime = 0;
-
-        // Dodge state
-        enemy.isDodging = false;
-        enemy.dodgeStartTime = 0;
-        enemy.lastDodged = 0;
-        enemy.dodgeTargetX = 0;
-        enemy.dodgeTargetY = 0;
-
-        // Create cast indicator for this enemy
-        const castIndicator = this.add.graphics();
-        castIndicator.lineStyle(3, 0xffff00, 1);
-        castIndicator.strokeCircle(0, 0, 24);
-        castIndicator.setVisible(false);
-        enemy.castIndicator = castIndicator;
-        this.castIndicators.add(castIndicator);
-    }
 
     /**
      * Fire a bullet from the player
@@ -614,7 +971,41 @@ class GameScene extends Phaser.Scene {
         }
         enemy.destroy();
         this.score += GAME_CONFIG.POINTS_PER_KILL;
+        this.enemiesKilled++;
         this.scoreLabel.setText('Score: ' + this.score);
+
+        // Check win condition
+        if (this.enemiesKilled >= this.totalEnemies) {
+            this.handleVictory();
+        }
+    }
+
+    /**
+     * Handle victory (all enemies killed)
+     */
+    handleVictory() {
+        this.physics.pause();
+
+        // Disable input zones to prevent interactions during victory
+        if (this.zoneAttack) this.zoneAttack.disableInteractive();
+        if (this.zoneDodge) this.zoneDodge.disableInteractive();
+
+        this.showVictoryUI();
+        this.setupRestart();
+    }
+
+    showVictoryUI() {
+        this.scoreLabel.setText('VICTORY!\nAll Enemies Defeated\nScore: ' + this.score + '\n\nTap to Restart');
+        this.scoreLabel.setOrigin(0.5);
+        this.scoreLabel.setX(this.scale.width / 2);
+        this.scoreLabel.setY(this.scale.height / 2);
+        this.scoreLabel.setStyle({
+            fontSize: '32px',
+            fill: '#00ff00',
+            align: 'center',
+            backgroundColor: '#000000',
+            padding: { x: 20, y: 20 }
+        });
     }
 
     /**
@@ -747,22 +1138,51 @@ class GameScene extends Phaser.Scene {
     }
 
     /**
-     * Create attack zone
+     * Create attack button (visible button overlay)
      */
     createAttackZone(width, height) {
-        const zoneHeight = height * GAME_CONFIG.ZONE_HEIGHT_RATIO;
-        const zoneY = height * GAME_CONFIG.ATTACK_ZONE_Y;
+        const buttonSize = 100;
+        const buttonX = width - buttonSize - 20;
+        const buttonY = height - buttonSize - 180; // Above dodge zone
 
-        this.zoneAttack = this.add.zone(width / 2, zoneY, width, zoneHeight)
-            .setOrigin(0.5)
+        // Create button background
+        const buttonBg = this.add.circle(buttonX, buttonY, buttonSize / 2, 0xff0000, 0.3)
             .setScrollFactor(0)
             .setInteractive();
 
-        this.zoneAttack.on('pointerup', () => {
+        // Create button border
+        const buttonBorder = this.add.graphics();
+        buttonBorder.lineStyle(4, 0xff0000, 1);
+        buttonBorder.strokeCircle(buttonX, buttonY, buttonSize / 2);
+        buttonBorder.setScrollFactor(0);
+
+        // Create button label
+        const buttonLabel = this.add.text(buttonX, buttonY, 'FIRE', {
+            fontSize: '24px',
+            fill: '#fff',
+            fontStyle: 'bold'
+        })
+        .setOrigin(0.5)
+        .setScrollFactor(0);
+
+        // Store references
+        this.zoneAttack = buttonBg;
+        this.attackButton = { bg: buttonBg, border: buttonBorder, label: buttonLabel };
+
+        buttonBg.on('pointerdown', () => {
+            // Visual feedback
+            buttonBg.setAlpha(0.6);
+        });
+
+        buttonBg.on('pointerup', () => {
+            buttonBg.setAlpha(0.3);
             if (!this.isSwipeGesture) {
                 this.fireBullet();
-                this.flashZone(zoneY - zoneHeight / 2, zoneHeight, GAME_CONFIG.ATTACK_FLASH_COLOR);
             }
+        });
+
+        buttonBg.on('pointerout', () => {
+            buttonBg.setAlpha(0.3);
         });
     }
 
@@ -839,16 +1259,22 @@ class GameScene extends Phaser.Scene {
             this.modeText.setPosition(width / 2, 50);
         }
 
-        if (this.zoneAttack) {
-            const zoneHeight = height * GAME_CONFIG.ZONE_HEIGHT_RATIO;
-            this.zoneAttack.setSize(width, zoneHeight)
-                .setPosition(width / 2, height * GAME_CONFIG.ATTACK_ZONE_Y);
-            this.zoneDodge.setSize(width, zoneHeight)
-                .setPosition(width / 2, height * GAME_CONFIG.DODGE_ZONE_Y);
+        if (this.attackButton) {
+            const buttonSize = 100;
+            const buttonX = width - buttonSize - 20;
+            const buttonY = height - buttonSize - 180;
+
+            this.attackButton.bg.setPosition(buttonX, buttonY);
+            this.attackButton.border.clear();
+            this.attackButton.border.lineStyle(4, 0xff0000, 1);
+            this.attackButton.border.strokeCircle(buttonX, buttonY, buttonSize / 2);
+            this.attackButton.label.setPosition(buttonX, buttonY);
         }
 
-        if (this.background) {
-            this.background.setSize(width, height);
+        if (this.zoneDodge) {
+            const zoneHeight = height * GAME_CONFIG.ZONE_HEIGHT_RATIO;
+            this.zoneDodge.setSize(width, zoneHeight)
+                .setPosition(width / 2, height * GAME_CONFIG.DODGE_ZONE_Y);
         }
     }
 }

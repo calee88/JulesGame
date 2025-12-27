@@ -81,7 +81,7 @@ const GAME_CONFIG = {
 
     // Auto-walk
     PLAYER_AUTO_WALK_SPEED: 180,
-    PLAYER_ARRIVAL_THRESHOLD: 50, // Distance to consider "arrived" at destination
+    PLAYER_ARRIVAL_THRESHOLD: 16, // Distance to consider "arrived" - must be smaller than GRID_SIZE
 
     // Zone Flash
     ZONE_FLASH_DURATION: 200,
@@ -808,6 +808,7 @@ class GameScene extends Phaser.Scene {
             const shouldAdvanceWaypoint = distance < GAME_CONFIG.PLAYER_ARRIVAL_THRESHOLD;
 
             // Also check if there's a next waypoint and we're closer to it than the current one
+            // BUT only skip if we have line-of-sight to prevent skipping through walls
             const skipCurrentWaypoint = this.currentPathIndex < this.playerPath.length - 1 &&
                 (() => {
                     const nextTarget = this.playerPath[this.currentPathIndex + 1];
@@ -815,8 +816,18 @@ class GameScene extends Phaser.Scene {
                         this.player.x, this.player.y,
                         nextTarget.x, nextTarget.y
                     );
-                    // Skip if we're closer to the next waypoint (indicates we passed or went around current)
-                    return distanceToNext < distance;
+                    // Only skip if closer AND we have clear line-of-sight to next waypoint
+                    if (distanceToNext < distance) {
+                        const playerGridX = Math.floor(this.player.x / GAME_CONFIG.GRID_SIZE);
+                        const playerGridY = Math.floor(this.player.y / GAME_CONFIG.GRID_SIZE);
+                        const nextGridX = Math.floor(nextTarget.x / GAME_CONFIG.GRID_SIZE);
+                        const nextGridY = Math.floor(nextTarget.y / GAME_CONFIG.GRID_SIZE);
+                        return this.hasLineOfSight(
+                            { x: playerGridX, y: playerGridY },
+                            { x: nextGridX, y: nextGridY }
+                        );
+                    }
+                    return false;
                 })();
 
             if (shouldAdvanceWaypoint || skipCurrentWaypoint) {

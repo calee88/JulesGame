@@ -461,11 +461,15 @@ class GameScene extends Phaser.Scene {
         }
 
         // Mark wall cells as blocked
+        // Mark any grid cell that OVERLAPS with a wall as blocked
         this.mapData.walls.forEach(wall => {
+            // Calculate which grid cells this wall overlaps
+            // Use floor for start to include cells that partially overlap at the beginning
+            // Use ceil for end to include cells that partially overlap at the end
             const startX = Math.floor(wall.x / GAME_CONFIG.GRID_SIZE);
             const startY = Math.floor(wall.y / GAME_CONFIG.GRID_SIZE);
-            const endX = Math.ceil((wall.x + wall.width) / GAME_CONFIG.GRID_SIZE);
-            const endY = Math.ceil((wall.y + wall.height) / GAME_CONFIG.GRID_SIZE);
+            const endX = Math.floor((wall.x + wall.width - 1) / GAME_CONFIG.GRID_SIZE) + 1;
+            const endY = Math.floor((wall.y + wall.height - 1) / GAME_CONFIG.GRID_SIZE) + 1;
 
             for (let y = startY; y < endY && y < gridHeight; y++) {
                 for (let x = startX; x < endX && x < gridWidth; x++) {

@@ -340,6 +340,35 @@ class GameScene extends Phaser.Scene {
         // Create graphics object for path visualization
         this.pathGraphics = this.add.graphics();
         this.pathGraphics.setDepth(100); // Draw on top of most things
+
+        // Draw the pathfinding grid to visualize blocked cells
+        this.drawPathfindingGrid();
+    }
+
+    drawPathfindingGrid() {
+        const graphics = this.add.graphics();
+        graphics.setDepth(50); // Below path but above floor
+
+        const gridWidth = this.pathfindingGrid[0].length;
+        const gridHeight = this.pathfindingGrid.length;
+
+        // Draw each grid cell
+        for (let y = 0; y < gridHeight; y++) {
+            for (let x = 0; x < gridWidth; x++) {
+                const worldX = x * GAME_CONFIG.GRID_SIZE;
+                const worldY = y * GAME_CONFIG.GRID_SIZE;
+
+                if (this.pathfindingGrid[y][x] === 1) {
+                    // Blocked cell - draw semi-transparent red
+                    graphics.fillStyle(0xff0000, 0.3);
+                    graphics.fillRect(worldX, worldY, GAME_CONFIG.GRID_SIZE, GAME_CONFIG.GRID_SIZE);
+                }
+
+                // Draw grid lines
+                graphics.lineStyle(1, 0xffffff, 0.1);
+                graphics.strokeRect(worldX, worldY, GAME_CONFIG.GRID_SIZE, GAME_CONFIG.GRID_SIZE);
+            }
+        }
     }
 
     drawPath() {

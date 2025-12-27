@@ -140,6 +140,9 @@ class GameScene extends Phaser.Scene {
         this.playerDestination = null;
         this.playerPath = null;
         this.currentPathIndex = 0;
+        this.lastPlayerPosition = { x: 0, y: 0 };
+        this.stuckCheckTimer = 0;
+        this.stuckCheckInterval = 500; // Check every 500ms
 
         // Win Condition
         this.totalEnemies = 0;
@@ -532,7 +535,7 @@ class GameScene extends Phaser.Scene {
      * Update: Main game loop
      */
     update(time, delta) {
-        this.updatePlayerAutoWalk();
+        this.updatePlayerAutoWalk(time);
         this.updateEnemyAggro();
         this.updateEnemyDodging(time);
         this.updateEnemyMovement();
@@ -570,7 +573,7 @@ class GameScene extends Phaser.Scene {
     /**
      * Auto-walk player to nearest enemy
      */
-    updatePlayerAutoWalk() {
+    updatePlayerAutoWalk(time) {
         if (!this.player.active) return;
 
         // Find nearest enemy
@@ -594,6 +597,24 @@ class GameScene extends Phaser.Scene {
         if (!nearestEnemy) {
             this.player.setVelocity(0, 0);
             return;
+        }
+
+        // Stuck detection: Check if player has moved since last check
+        if (time - this.stuckCheckTimer >= this.stuckCheckInterval) {
+            const distanceMoved = Phaser.Math.Distance.Between(
+                this.player.x, this.player.y,
+                this.lastPlayerPosition.x, this.lastPlayerPosition.y
+            );
+
+            // If player hasn't moved much (10px threshold), force path recalculation
+            if (distanceMoved < 10 && this.playerPath) {
+                this.playerPath = null; // Force recalculation
+            }
+
+            // Update last position and timer
+            this.lastPlayerPosition.x = this.player.x;
+            this.lastPlayerPosition.y = this.player.y;
+            this.stuckCheckTimer = time;
         }
 
         // Check if we need a new path

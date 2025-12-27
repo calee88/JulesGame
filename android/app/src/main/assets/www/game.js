@@ -455,16 +455,52 @@ class GameScene extends Phaser.Scene {
         const gridHeight = this.pathfindingGrid.length;
         const gridWidth = this.pathfindingGrid[0].length;
 
+        // Check if start is valid
+        if (startGridX < 0 || startGridX >= gridWidth || startGridY < 0 || startGridY >= gridHeight) {
+            return null;
+        }
+
         // Check if goal is valid
         if (goalGridX < 0 || goalGridX >= gridWidth || goalGridY < 0 || goalGridY >= gridHeight) {
             return null;
         }
+
+        // If goal is blocked, try to find nearest walkable cell
         if (this.pathfindingGrid[goalGridY][goalGridX] === 1) {
-            return null; // Goal is blocked
+            // Find nearest walkable cell to goal
+            let bestDist = Infinity;
+            let bestX = goalGridX;
+            let bestY = goalGridY;
+
+            for (let dy = -2; dy <= 2; dy++) {
+                for (let dx = -2; dx <= 2; dx++) {
+                    const nx = goalGridX + dx;
+                    const ny = goalGridY + dy;
+                    if (nx >= 0 && nx < gridWidth && ny >= 0 && ny < gridHeight) {
+                        if (this.pathfindingGrid[ny][nx] === 0) {
+                            const dist = Math.abs(dx) + Math.abs(dy);
+                            if (dist < bestDist) {
+                                bestDist = dist;
+                                bestX = nx;
+                                bestY = ny;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (bestDist === Infinity) {
+                return null; // No walkable cells nearby
+            }
+
+            // Update goal to nearest walkable cell
+            goalGridX = bestX;
+            goalGridY = bestY;
         }
 
         // A* algorithm
         const openSet = [{ x: startGridX, y: startGridY }];
+        const closedSet = new Set();
         const cameFrom = {};
         const gScore = {};
         const fScore = {};
@@ -489,7 +525,9 @@ class GameScene extends Phaser.Scene {
                 return this.reconstructPath(cameFrom, current, startGridX, startGridY);
             }
 
+            // Move current from open to closed
             openSet.splice(currentIndex, 1);
+            closedSet.add(key(current.x, current.y));
 
             // Check all neighbors
             const neighbors = [
@@ -505,6 +543,13 @@ class GameScene extends Phaser.Scene {
             ];
 
             for (const neighbor of neighbors) {
+                const neighborKey = key(neighbor.x, neighbor.y);
+
+                // Skip if already evaluated
+                if (closedSet.has(neighborKey)) {
+                    continue;
+                }
+
                 // Check bounds
                 if (neighbor.x < 0 || neighbor.x >= gridWidth || neighbor.y < 0 || neighbor.y >= gridHeight) {
                     continue;
@@ -520,7 +565,6 @@ class GameScene extends Phaser.Scene {
                 const moveCost = isDiagonal ? 1.414 : 1;
                 const tentativeGScore = gScore[key(current.x, current.y)] + moveCost;
 
-                const neighborKey = key(neighbor.x, neighbor.y);
                 if (gScore[neighborKey] === undefined || tentativeGScore < gScore[neighborKey]) {
                     cameFrom[neighborKey] = current;
                     gScore[neighborKey] = tentativeGScore;

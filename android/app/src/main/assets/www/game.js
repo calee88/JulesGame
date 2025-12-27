@@ -142,7 +142,8 @@ class GameScene extends Phaser.Scene {
         this.currentPathIndex = 0;
         this.lastPlayerPosition = { x: 0, y: 0 };
         this.stuckCheckTimer = 0;
-        this.stuckCheckInterval = 500; // Check every 500ms
+        this.stuckCheckInterval = 1000; // Check every 1000ms (less aggressive)
+        this.pathGraphics = null; // Visual debugging for path
 
         // Win Condition
         this.totalEnemies = 0;
@@ -252,6 +253,7 @@ class GameScene extends Phaser.Scene {
         this.setupCamera(width);
         this.setupGroups();
         this.setupTargetIndicator();
+        this.setupPathVisualization();
         this.spawnAllEnemies();
         this.setupUI(width, height);
         this.setupInputZones(width, height);
@@ -332,6 +334,49 @@ class GameScene extends Phaser.Scene {
 
         // Create a group to hold cast indicators
         this.castIndicators = this.add.group();
+    }
+
+    setupPathVisualization() {
+        // Create graphics object for path visualization
+        this.pathGraphics = this.add.graphics();
+        this.pathGraphics.setDepth(100); // Draw on top of most things
+    }
+
+    drawPath() {
+        this.pathGraphics.clear();
+
+        if (!this.playerPath || this.playerPath.length === 0) {
+            return;
+        }
+
+        // Draw the path as a series of lines
+        this.pathGraphics.lineStyle(3, 0x00ff00, 0.5);
+
+        // Start from player position
+        this.pathGraphics.beginPath();
+        this.pathGraphics.moveTo(this.player.x, this.player.y);
+
+        // Draw lines to each waypoint
+        for (let i = this.currentPathIndex; i < this.playerPath.length; i++) {
+            const waypoint = this.playerPath[i];
+            this.pathGraphics.lineTo(waypoint.x, waypoint.y);
+        }
+
+        this.pathGraphics.strokePath();
+
+        // Draw circles at waypoints
+        for (let i = this.currentPathIndex; i < this.playerPath.length; i++) {
+            const waypoint = this.playerPath[i];
+
+            // Current target is larger and different color
+            if (i === this.currentPathIndex) {
+                this.pathGraphics.fillStyle(0xffff00, 0.8);
+                this.pathGraphics.fillCircle(waypoint.x, waypoint.y, 8);
+            } else {
+                this.pathGraphics.fillStyle(0x00ff00, 0.6);
+                this.pathGraphics.fillCircle(waypoint.x, waypoint.y, 4);
+            }
+        }
     }
 
     setupUI(width, height) {
@@ -542,6 +587,7 @@ class GameScene extends Phaser.Scene {
         this.updateEnemyShooting(time);
         this.updateTargeting();
         this.cleanupBullets();
+        this.drawPath(); // Visual debugging
     }
 
     /**
@@ -599,23 +645,23 @@ class GameScene extends Phaser.Scene {
             return;
         }
 
-        // Stuck detection: Check if player has moved since last check
-        if (time - this.stuckCheckTimer >= this.stuckCheckInterval) {
-            const distanceMoved = Phaser.Math.Distance.Between(
-                this.player.x, this.player.y,
-                this.lastPlayerPosition.x, this.lastPlayerPosition.y
-            );
+        // Stuck detection: Check if player has moved since last check (DISABLED - causing vibration)
+        // if (time - this.stuckCheckTimer >= this.stuckCheckInterval) {
+        //     const distanceMoved = Phaser.Math.Distance.Between(
+        //         this.player.x, this.player.y,
+        //         this.lastPlayerPosition.x, this.lastPlayerPosition.y
+        //     );
 
-            // If player hasn't moved much (10px threshold), force path recalculation
-            if (distanceMoved < 10 && this.playerPath) {
-                this.playerPath = null; // Force recalculation
-            }
+        //     // If player hasn't moved much (threshold), force path recalculation
+        //     if (distanceMoved < 30 && this.playerPath) {
+        //         this.playerPath = null; // Force recalculation
+        //     }
 
-            // Update last position and timer
-            this.lastPlayerPosition.x = this.player.x;
-            this.lastPlayerPosition.y = this.player.y;
-            this.stuckCheckTimer = time;
-        }
+        //     // Update last position and timer
+        //     this.lastPlayerPosition.x = this.player.x;
+        //     this.lastPlayerPosition.y = this.player.y;
+        //     this.stuckCheckTimer = time;
+        // }
 
         // Check if we need a new path
         if (!this.playerPath || !this.playerDestination ||

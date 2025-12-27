@@ -134,6 +134,7 @@ class GameScene extends Phaser.Scene {
         this.mapData = null;
         this.walls = null;
         this.pathfindingGrid = null;
+        this.easystar = null;
 
         // Auto-walk System
         this.playerDestination = null;
@@ -367,7 +368,7 @@ class GameScene extends Phaser.Scene {
     }
 
     /**
-     * Create pathfinding grid
+     * Create pathfinding grid using EasyStar.js
      */
     createPathfindingGrid() {
         const gridWidth = Math.ceil(this.mapData.width / GAME_CONFIG.GRID_SIZE);
@@ -395,6 +396,13 @@ class GameScene extends Phaser.Scene {
                 }
             }
         });
+
+        // Initialize EasyStar pathfinder
+        this.easystar = new EasyStar.js();
+        this.easystar.setGrid(this.pathfindingGrid);
+        this.easystar.setAcceptableTiles([0]); // 0 is walkable
+        this.easystar.enableDiagonals();
+        this.easystar.enableCornerCutting();
     }
 
     /**
@@ -439,41 +447,43 @@ class GameScene extends Phaser.Scene {
     }
 
     /**
-     * A* Pathfinding: Find path from start to goal
+     * Pathfinding using EasyStar.js (async)
      */
-    findPath(startX, startY, goalX, goalY) {
-        if (!this.pathfindingGrid || this.pathfindingGrid.length === 0) {
-            return null;
+    findPath(startX, startY, goalX, goalY, callback) {
+        if (!this.easystar || !this.pathfindingGrid || this.pathfindingGrid.length === 0) {
+            callback(null);
+            return;
         }
 
         // Convert world coordinates to grid coordinates
         const startGridX = Math.floor(startX / GAME_CONFIG.GRID_SIZE);
         const startGridY = Math.floor(startY / GAME_CONFIG.GRID_SIZE);
-        const goalGridX = Math.floor(goalX / GAME_CONFIG.GRID_SIZE);
-        const goalGridY = Math.floor(goalY / GAME_CONFIG.GRID_SIZE);
+        let goalGridX = Math.floor(goalX / GAME_CONFIG.GRID_SIZE);
+        let goalGridY = Math.floor(goalY / GAME_CONFIG.GRID_SIZE);
 
         const gridHeight = this.pathfindingGrid.length;
         const gridWidth = this.pathfindingGrid[0].length;
 
         // Check if start is valid
         if (startGridX < 0 || startGridX >= gridWidth || startGridY < 0 || startGridY >= gridHeight) {
-            return null;
+            callback(null);
+            return;
         }
 
         // Check if goal is valid
         if (goalGridX < 0 || goalGridX >= gridWidth || goalGridY < 0 || goalGridY >= gridHeight) {
-            return null;
+            callback(null);
+            return;
         }
 
         // If goal is blocked, try to find nearest walkable cell
         if (this.pathfindingGrid[goalGridY][goalGridX] === 1) {
-            // Find nearest walkable cell to goal
             let bestDist = Infinity;
             let bestX = goalGridX;
             let bestY = goalGridY;
 
-            for (let dy = -2; dy <= 2; dy++) {
-                for (let dx = -2; dx <= 2; dx++) {
+            for (let dy = -3; dy <= 3; dy++) {
+                for (let dx = -3; dx <= 3; dx++) {
                     const nx = goalGridX + dx;
                     const ny = goalGridY + dy;
                     if (nx >= 0 && nx < gridWidth && ny >= 0 && ny < gridHeight) {
@@ -490,117 +500,32 @@ class GameScene extends Phaser.Scene {
             }
 
             if (bestDist === Infinity) {
-                return null; // No walkable cells nearby
+                callback(null);
+                return;
             }
 
-            // Update goal to nearest walkable cell
             goalGridX = bestX;
             goalGridY = bestY;
         }
 
-        // A* algorithm
-        const openSet = [{ x: startGridX, y: startGridY }];
-        const closedSet = new Set();
-        const cameFrom = {};
-        const gScore = {};
-        const fScore = {};
-
-        const key = (x, y) => `${x},${y}`;
-        gScore[key(startGridX, startGridY)] = 0;
-        fScore[key(startGridX, startGridY)] = this.heuristic(startGridX, startGridY, goalGridX, goalGridY);
-
-        while (openSet.length > 0) {
-            // Find node with lowest fScore
-            let current = openSet[0];
-            let currentIndex = 0;
-            for (let i = 1; i < openSet.length; i++) {
-                if (fScore[key(openSet[i].x, openSet[i].y)] < fScore[key(current.x, current.y)]) {
-                    current = openSet[i];
-                    currentIndex = i;
-                }
+        // Use EasyStar to find path
+        this.easystar.findPath(startGridX, startGridY, goalGridX, goalGridY, (path) => {
+            if (path === null || path.length === 0) {
+                callback(null);
+                return;
             }
 
-            // Check if we reached the goal
-            if (current.x === goalGridX && current.y === goalGridY) {
-                return this.reconstructPath(cameFrom, current, startGridX, startGridY);
-            }
+            // Convert grid path to world coordinates
+            const worldPath = path.map(node => ({
+                x: node.x * GAME_CONFIG.GRID_SIZE + GAME_CONFIG.GRID_SIZE / 2,
+                y: node.y * GAME_CONFIG.GRID_SIZE + GAME_CONFIG.GRID_SIZE / 2
+            }));
 
-            // Move current from open to closed
-            openSet.splice(currentIndex, 1);
-            closedSet.add(key(current.x, current.y));
+            callback(worldPath);
+        });
 
-            // Check all neighbors
-            const neighbors = [
-                { x: current.x + 1, y: current.y },
-                { x: current.x - 1, y: current.y },
-                { x: current.x, y: current.y + 1 },
-                { x: current.x, y: current.y - 1 },
-                // Diagonals
-                { x: current.x + 1, y: current.y + 1 },
-                { x: current.x + 1, y: current.y - 1 },
-                { x: current.x - 1, y: current.y + 1 },
-                { x: current.x - 1, y: current.y - 1 }
-            ];
-
-            for (const neighbor of neighbors) {
-                const neighborKey = key(neighbor.x, neighbor.y);
-
-                // Skip if already evaluated
-                if (closedSet.has(neighborKey)) {
-                    continue;
-                }
-
-                // Check bounds
-                if (neighbor.x < 0 || neighbor.x >= gridWidth || neighbor.y < 0 || neighbor.y >= gridHeight) {
-                    continue;
-                }
-
-                // Check if walkable
-                if (this.pathfindingGrid[neighbor.y][neighbor.x] === 1) {
-                    continue;
-                }
-
-                // Calculate tentative gScore
-                const isDiagonal = neighbor.x !== current.x && neighbor.y !== current.y;
-                const moveCost = isDiagonal ? 1.414 : 1;
-                const tentativeGScore = gScore[key(current.x, current.y)] + moveCost;
-
-                if (gScore[neighborKey] === undefined || tentativeGScore < gScore[neighborKey]) {
-                    cameFrom[neighborKey] = current;
-                    gScore[neighborKey] = tentativeGScore;
-                    fScore[neighborKey] = gScore[neighborKey] + this.heuristic(neighbor.x, neighbor.y, goalGridX, goalGridY);
-
-                    // Add to openSet if not already there
-                    if (!openSet.some(node => node.x === neighbor.x && node.y === neighbor.y)) {
-                        openSet.push(neighbor);
-                    }
-                }
-            }
-        }
-
-        return null; // No path found
-    }
-
-    heuristic(x1, y1, x2, y2) {
-        // Euclidean distance
-        return Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
-    }
-
-    reconstructPath(cameFrom, current, startX, startY) {
-        const path = [];
-        const key = (x, y) => `${x},${y}`;
-
-        while (key(current.x, current.y) !== key(startX, startY)) {
-            // Convert grid coordinates back to world coordinates (center of cell)
-            path.unshift({
-                x: current.x * GAME_CONFIG.GRID_SIZE + GAME_CONFIG.GRID_SIZE / 2,
-                y: current.y * GAME_CONFIG.GRID_SIZE + GAME_CONFIG.GRID_SIZE / 2
-            });
-            current = cameFrom[key(current.x, current.y)];
-            if (!current) break;
-        }
-
-        return path;
+        // Calculate the path (EasyStar requires this to be called)
+        this.easystar.calculate();
     }
 
     /**
@@ -676,15 +601,18 @@ class GameScene extends Phaser.Scene {
             Phaser.Math.Distance.Between(
                 this.playerDestination.x, this.playerDestination.y,
                 nearestEnemy.x, nearestEnemy.y
-            ) > GAME_CONFIG.PLAYER_ARRIVAL_THRESHOLD) {
+            ) > GAME_CONFIG.PLAYER_ARRIVAL_THRESHOLD * 3) {
 
-            // Set new destination and find path
+            // Set new destination and find path asynchronously
             this.playerDestination = { x: nearestEnemy.x, y: nearestEnemy.y };
-            this.playerPath = this.findPath(
+            this.findPath(
                 this.player.x, this.player.y,
-                this.playerDestination.x, this.playerDestination.y
+                this.playerDestination.x, this.playerDestination.y,
+                (path) => {
+                    this.playerPath = path;
+                    this.currentPathIndex = 0;
+                }
             );
-            this.currentPathIndex = 0;
         }
 
         // Follow path
@@ -714,7 +642,7 @@ class GameScene extends Phaser.Scene {
                 );
             }
         } else {
-            // No path, try to move directly (shouldn't happen often)
+            // No path yet, move directly toward enemy
             const angle = Phaser.Math.Angle.Between(
                 this.player.x, this.player.y,
                 nearestEnemy.x, nearestEnemy.y

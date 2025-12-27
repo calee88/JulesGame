@@ -601,8 +601,11 @@ class GameScene extends Phaser.Scene {
                 return;
             }
 
+            // Smooth the path to remove unnecessary waypoints
+            const smoothedPath = this.smoothPath(path);
+
             // Convert grid path to world coordinates
-            const worldPath = path.map(node => ({
+            const worldPath = smoothedPath.map(node => ({
                 x: node.x * GAME_CONFIG.GRID_SIZE + GAME_CONFIG.GRID_SIZE / 2,
                 y: node.y * GAME_CONFIG.GRID_SIZE + GAME_CONFIG.GRID_SIZE / 2
             }));
@@ -612,6 +615,78 @@ class GameScene extends Phaser.Scene {
 
         // Calculate the path (EasyStar requires this to be called)
         this.easystar.calculate();
+    }
+
+    /**
+     * Smooth a grid path by removing unnecessary waypoints
+     * Uses line-of-sight checks to skip intermediate points
+     */
+    smoothPath(path) {
+        if (!path || path.length <= 2) return path;
+
+        const smoothed = [path[0]]; // Always keep start
+        let current = 0;
+
+        while (current < path.length - 1) {
+            // Try to find the furthest point we can reach directly
+            let furthest = current + 1;
+
+            for (let i = path.length - 1; i > current + 1; i--) {
+                if (this.hasLineOfSight(path[current], path[i])) {
+                    furthest = i;
+                    break;
+                }
+            }
+
+            smoothed.push(path[furthest]);
+            current = furthest;
+        }
+
+        return smoothed;
+    }
+
+    /**
+     * Check if there's a clear line of sight between two grid points
+     * Uses Bresenham's line algorithm to check all cells along the path
+     */
+    hasLineOfSight(from, to) {
+        let x0 = from.x;
+        let y0 = from.y;
+        const x1 = to.x;
+        const y1 = to.y;
+
+        const dx = Math.abs(x1 - x0);
+        const dy = Math.abs(y1 - y0);
+        const sx = x0 < x1 ? 1 : -1;
+        const sy = y0 < y1 ? 1 : -1;
+        let err = dx - dy;
+
+        while (true) {
+            // Check if current cell is blocked
+            if (y0 >= 0 && y0 < this.pathfindingGrid.length &&
+                x0 >= 0 && x0 < this.pathfindingGrid[0].length) {
+                if (this.pathfindingGrid[y0][x0] === 1) {
+                    return false; // Hit a wall
+                }
+            } else {
+                return false; // Out of bounds
+            }
+
+            // Reached destination
+            if (x0 === x1 && y0 === y1) break;
+
+            const e2 = 2 * err;
+            if (e2 > -dy) {
+                err -= dy;
+                x0 += sx;
+            }
+            if (e2 < dx) {
+                err += dx;
+                y0 += sy;
+            }
+        }
+
+        return true;
     }
 
     /**

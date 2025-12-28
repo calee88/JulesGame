@@ -1131,6 +1131,9 @@ class GameScene extends Phaser.Scene {
                         Math.cos(angle) * GAME_CONFIG.ENEMY_DODGE_SPEED,
                         Math.sin(angle) * GAME_CONFIG.ENEMY_DODGE_SPEED
                     );
+                } else if (enemy.isCasting) {
+                    // Stop moving while casting
+                    enemy.setVelocity(0, 0);
                 } else if (enemy.isAggro && this.player.active) {
                     // Aggro: Chase player
                     const distance = Phaser.Math.Distance.Between(

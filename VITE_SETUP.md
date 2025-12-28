@@ -20,7 +20,6 @@ JulesGame/
 │   │   └── InputSystem.js         # Input handling and UI zones
 │   └── main.js                    # Entry point
 ├── public/                        # Static assets
-│   ├── easystar-0.4.4.min.js
 │   ├── map1.json
 │   ├── debug_map.json
 │   └── manifest.json
@@ -97,8 +96,8 @@ Preview the production build locally
 
 - The original `game.js` is still in `android/app/src/main/assets/www/` for the Android build
 - All game logic has been preserved; only the structure has changed
-- Static assets (maps, EasyStar library) are in the `public/` directory
-- Phaser is now installed as an npm dependency instead of loaded from CDN
+- Static assets (maps) are in the `public/` directory
+- Phaser and EasyStar.js are now installed as npm dependencies instead of loaded from CDN/local files
 
 ## Next Steps
 

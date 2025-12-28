@@ -1,3 +1,4 @@
+import EasyStar from 'easystarjs';
 import { GAME_CONFIG } from '../config/gameConfig.js';
 
 /**

@@ -921,15 +921,38 @@ class GameScene extends Phaser.Scene {
             const targetX = nearestEnemy.x + Math.cos(this.orbitalAngle) * GAME_CONFIG.PLAYER_ORBITAL_RANGE;
             const targetY = nearestEnemy.y + Math.sin(this.orbitalAngle) * GAME_CONFIG.PLAYER_ORBITAL_RANGE;
 
-            // Move toward orbital position
-            const angle = Phaser.Math.Angle.Between(
+            // Calculate current distance to enemy
+            const currentDistance = Phaser.Math.Distance.Between(
                 this.player.x, this.player.y,
-                targetX, targetY
+                nearestEnemy.x, nearestEnemy.y
             );
 
+            // Calculate velocity with two components:
+            // 1. Tangential: move along the orbit (perpendicular to radial direction)
+            // 2. Radial: push outward if too close, inward if too far
+
+            // Current angle from enemy to player
+            const currentAngle = Phaser.Math.Angle.Between(
+                nearestEnemy.x, nearestEnemy.y,
+                this.player.x, this.player.y
+            );
+
+            // Tangential direction (perpendicular to radial, based on orbital direction)
+            const tangentAngle = currentAngle + (this.orbitalDirection * Math.PI / 2);
+
+            // Radial correction: how much to push outward/inward to maintain distance
+            const distanceError = GAME_CONFIG.PLAYER_ORBITAL_RANGE - currentDistance;
+            const radialSpeed = distanceError * 2; // Proportional correction
+
+            // Combine tangential and radial velocities
+            const tangentVelX = Math.cos(tangentAngle) * GAME_CONFIG.PLAYER_ORBITAL_SPEED;
+            const tangentVelY = Math.sin(tangentAngle) * GAME_CONFIG.PLAYER_ORBITAL_SPEED;
+            const radialVelX = Math.cos(currentAngle) * radialSpeed;
+            const radialVelY = Math.sin(currentAngle) * radialSpeed;
+
             this.player.setVelocity(
-                Math.cos(angle) * GAME_CONFIG.PLAYER_ORBITAL_SPEED,
-                Math.sin(angle) * GAME_CONFIG.PLAYER_ORBITAL_SPEED
+                tangentVelX + radialVelX,
+                tangentVelY + radialVelY
             );
 
             // Clear any pathfinding data

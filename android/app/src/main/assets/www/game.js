@@ -900,9 +900,22 @@ class GameScene extends Phaser.Scene {
                                 this.player.body.touching.left ||
                                 this.player.body.touching.right;
 
+            // DEBUG: Log collision state every 500ms
+            if (!this.lastDebugTime || time - this.lastDebugTime > 500) {
+                console.log('=== ORBITAL DEBUG ===');
+                console.log('Player pos:', this.player.x.toFixed(1), this.player.y.toFixed(1));
+                console.log('Player velocity:', this.player.body.velocity.x.toFixed(1), this.player.body.velocity.y.toFixed(1));
+                console.log('touching:', JSON.stringify(this.player.body.touching));
+                console.log('blocked:', JSON.stringify(this.player.body.blocked));
+                console.log('touchingWall:', touchingWall);
+                console.log('orbitalDirection:', this.orbitalDirection);
+                this.lastDebugTime = time;
+            }
+
             const wallReverseCooldown = 500; // ms before allowing another direction change
             if (touchingWall && (time - this.lastWallReverseTime > wallReverseCooldown)) {
                 // Reverse orbital direction when hitting a wall
+                console.log('>>> WALL HIT! Reversing direction from', this.orbitalDirection, 'to', -this.orbitalDirection);
                 this.orbitalDirection *= -1;
                 this.lastWallReverseTime = time;
             }

@@ -993,10 +993,15 @@ class GameScene extends Phaser.Scene {
             this.wasOrbitalBlocked = tangentBlocked;
 
             // Radial correction: push outward if too close, inward if too far
-            const distanceError = GAME_CONFIG.PLAYER_ORBITAL_RANGE - currentDistance;
-            const radialSpeed = distanceError * 2; // Proportional correction
-            const radialVelX = Math.cos(currentAngle) * radialSpeed;
-            const radialVelY = Math.sin(currentAngle) * radialSpeed;
+            // Disabled in debug map (no walls) to observe natural distance changes
+            let radialVelX = 0;
+            let radialVelY = 0;
+            if (this.mapData.walls.length > 0) {
+                const distanceError = GAME_CONFIG.PLAYER_ORBITAL_RANGE - currentDistance;
+                const radialSpeed = distanceError * 2; // Proportional correction
+                radialVelX = Math.cos(currentAngle) * radialSpeed;
+                radialVelY = Math.sin(currentAngle) * radialSpeed;
+            }
 
             // Recalculate tangent velocity with potentially reversed direction
             const newTangentAngle = currentAngle + (this.orbitalDirection * Math.PI / 2);

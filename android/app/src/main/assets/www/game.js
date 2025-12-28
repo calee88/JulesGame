@@ -740,10 +740,6 @@ class GameScene extends Phaser.Scene {
         // Calculate current angle from target to player
         const currentAngle = Phaser.Math.Angle.Between(targetX, targetY, playerX, playerY);
 
-        // Check both directions: clockwise (current - PI/2) and counterclockwise (current + PI/2)
-        const clockwiseAngle = currentAngle - Math.PI / 2;
-        const counterclockwiseAngle = currentAngle + Math.PI / 2;
-
         // Sample multiple points along the orbital path to find total distance before hitting wall
         const sampleCount = 8; // Check 8 points (quarter circle)
         const angleStep = (Math.PI / 2) / sampleCount;
@@ -761,9 +757,14 @@ class GameScene extends Phaser.Scene {
             const ccwX = targetX + Math.cos(ccwAngle) * GAME_CONFIG.PLAYER_ORBITAL_RANGE;
             const ccwY = targetY + Math.sin(ccwAngle) * GAME_CONFIG.PLAYER_ORBITAL_RANGE;
 
-            // Check outward from each orbital position
-            const cwWallDist = this.getDistanceToWallInDirection(cwX, cwY, cwAngle, 300);
-            const ccwWallDist = this.getDistanceToWallInDirection(ccwX, ccwY, ccwAngle, 300);
+            // Check in the TANGENT direction (perpendicular to radius) - the actual movement direction
+            // For clockwise: tangent is perpendicular counter-clockwise to radius (angle - PI/2)
+            // For counter-clockwise: tangent is perpendicular clockwise to radius (angle + PI/2)
+            const cwTangentAngle = cwAngle - Math.PI / 2;
+            const ccwTangentAngle = ccwAngle + Math.PI / 2;
+
+            const cwWallDist = this.getDistanceToWallInDirection(cwX, cwY, cwTangentAngle, 300);
+            const ccwWallDist = this.getDistanceToWallInDirection(ccwX, ccwY, ccwTangentAngle, 300);
 
             clockwiseDistance += cwWallDist === Infinity ? 1000 : cwWallDist;
             counterclockwiseDistance += ccwWallDist === Infinity ? 1000 : ccwWallDist;

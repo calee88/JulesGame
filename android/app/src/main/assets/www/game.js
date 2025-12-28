@@ -151,7 +151,6 @@ class GameScene extends Phaser.Scene {
         // Orbital Movement System
         this.isOrbiting = false;
         this.orbitalDirection = 1; // 1 for clockwise, -1 for counterclockwise
-        this.orbitalAngle = 0;
         this.wasOrbitalBlocked = false; // Track wall contact state for edge detection
 
         // Win Condition
@@ -758,6 +757,7 @@ class GameScene extends Phaser.Scene {
     /**
      * Choose orbital direction based on wall detection
      * Returns 1 for clockwise, -1 for counterclockwise
+     * Picks the direction with more clearance (longer to hit wall)
      */
     chooseOrbitalDirection(playerX, playerY, targetX, targetY) {
         // Calculate current angle from target to player
@@ -794,14 +794,13 @@ class GameScene extends Phaser.Scene {
             counterclockwiseClearCount++;
         }
 
-        // If both directions are equally clear (full circle or no difference), choose randomly
+        // If both directions are equally clear, choose randomly
         if (clockwiseClearCount === counterclockwiseClearCount) {
             return Math.random() < 0.5 ? 1 : -1;
         }
 
-        // Choose direction with more clearance
-        // Clockwise movement = negative angular velocity (angle decreases) = -1
-        // Counterclockwise movement = positive angular velocity (angle increases) = 1
+        // Choose direction with more clearance (longer to hit wall)
+        // Clockwise = -1, Counterclockwise = 1
         return clockwiseClearCount > counterclockwiseClearCount ? -1 : 1;
     }
 
@@ -880,15 +879,10 @@ class GameScene extends Phaser.Scene {
             // Enter orbital mode
             if (!this.isOrbiting) {
                 this.isOrbiting = true;
-                // Choose orbital direction based on wall detection
+                // Choose direction with more clearance (longer to hit wall)
                 this.orbitalDirection = this.chooseOrbitalDirection(
                     this.player.x, this.player.y,
                     nearestEnemy.x, nearestEnemy.y
-                );
-                // Calculate initial angle
-                this.orbitalAngle = Phaser.Math.Angle.Between(
-                    nearestEnemy.x, nearestEnemy.y,
-                    this.player.x, this.player.y
                 );
             }
 
@@ -1131,6 +1125,9 @@ class GameScene extends Phaser.Scene {
                         Math.cos(angle) * GAME_CONFIG.ENEMY_DODGE_SPEED,
                         Math.sin(angle) * GAME_CONFIG.ENEMY_DODGE_SPEED
                     );
+                } else if (enemy.isCasting) {
+                    // Stop moving while casting
+                    enemy.setVelocity(0, 0);
                 } else if (enemy.isAggro && this.player.active) {
                     // Aggro: Chase player
                     const distance = Phaser.Math.Distance.Between(
@@ -1193,37 +1190,38 @@ class GameScene extends Phaser.Scene {
                 // Don't shoot while dodging
                 if (enemy.isDodging) return;
 
-                const distance = Phaser.Math.Distance.Between(
-                    enemy.x, enemy.y,
-                    this.player.x, this.player.y
-                );
+                // If already casting, finish the cast regardless of distance
+                if (enemy.isCasting) {
+                    // Check if cast is complete
+                    if (time - enemy.castStartTime >= GAME_CONFIG.ENEMY_CAST_TIME) {
+                        // Fire the bullet
+                        const angle = Phaser.Math.Angle.Between(
+                            enemy.x, enemy.y,
+                            this.player.x, this.player.y
+                        );
 
-                // Handle shooting with cast time when within stop distance
-                if (distance <= enemy.stopDistance) {
-                    if (enemy.isCasting) {
-                        // Check if cast is complete
-                        if (time - enemy.castStartTime >= GAME_CONFIG.ENEMY_CAST_TIME) {
-                            // Fire the bullet
-                            const angle = Phaser.Math.Angle.Between(
-                                enemy.x, enemy.y,
-                                this.player.x, this.player.y
-                            );
+                        const bullet = this.enemyBullets.create(enemy.x, enemy.y, 'enemyBullet');
+                        bullet.setVelocity(
+                            Math.cos(angle) * GAME_CONFIG.ENEMY_BULLET_SPEED,
+                            Math.sin(angle) * GAME_CONFIG.ENEMY_BULLET_SPEED
+                        );
 
-                            const bullet = this.enemyBullets.create(enemy.x, enemy.y, 'enemyBullet');
-                            bullet.setVelocity(
-                                Math.cos(angle) * GAME_CONFIG.ENEMY_BULLET_SPEED,
-                                Math.sin(angle) * GAME_CONFIG.ENEMY_BULLET_SPEED
-                            );
-
-                            // Reset cast state
-                            enemy.isCasting = false;
-                            enemy.lastFired = time;
-                            enemy.castIndicator.setVisible(false);
-                        } else {
-                            // Update cast indicator position
-                            enemy.castIndicator.setPosition(enemy.x, enemy.y);
-                        }
+                        // Reset cast state
+                        enemy.isCasting = false;
+                        enemy.lastFired = time;
+                        enemy.castIndicator.setVisible(false);
                     } else {
+                        // Update cast indicator position
+                        enemy.castIndicator.setPosition(enemy.x, enemy.y);
+                    }
+                } else {
+                    // Only start casting when within stop distance
+                    const distance = Phaser.Math.Distance.Between(
+                        enemy.x, enemy.y,
+                        this.player.x, this.player.y
+                    );
+
+                    if (distance <= enemy.stopDistance) {
                         // Start casting if ready to fire
                         if (time - enemy.lastFired > GAME_CONFIG.ENEMY_FIRE_RATE) {
                             enemy.isCasting = true;
@@ -1231,12 +1229,6 @@ class GameScene extends Phaser.Scene {
                             enemy.castIndicator.setPosition(enemy.x, enemy.y);
                             enemy.castIndicator.setVisible(true);
                         }
-                    }
-                } else {
-                    // Cancel cast if moving away
-                    if (enemy.isCasting) {
-                        enemy.isCasting = false;
-                        enemy.castIndicator.setVisible(false);
                     }
                 }
             }

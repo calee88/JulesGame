@@ -892,12 +892,13 @@ class GameScene extends Phaser.Scene {
                 );
             }
 
-            // Check if player is blocked by a wall (touching any side)
+            // Check if player is touching a wall (colliding with static body)
+            // Use 'touching' instead of 'blocked' - touching detects collision with any body
             // Use cooldown to prevent rapid direction flipping when stuck against wall
-            const touchingWall = this.player.body.blocked.up ||
-                                this.player.body.blocked.down ||
-                                this.player.body.blocked.left ||
-                                this.player.body.blocked.right;
+            const touchingWall = this.player.body.touching.up ||
+                                this.player.body.touching.down ||
+                                this.player.body.touching.left ||
+                                this.player.body.touching.right;
 
             const wallReverseCooldown = 500; // ms before allowing another direction change
             if (touchingWall && (time - this.lastWallReverseTime > wallReverseCooldown)) {

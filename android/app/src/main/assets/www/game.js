@@ -152,6 +152,7 @@ class GameScene extends Phaser.Scene {
         this.isOrbiting = false;
         this.orbitalDirection = 1; // 1 for clockwise, -1 for counterclockwise
         this.orbitalAngle = 0;
+        this.wasOrbitalBlocked = false; // Track wall contact state for edge detection
 
         // Win Condition
         this.totalEnemies = 0;
@@ -891,23 +892,59 @@ class GameScene extends Phaser.Scene {
                 );
             }
 
-            // Update orbital angle (convert angular speed to per-frame)
-            const deltaSeconds = delta / 1000;
-            this.orbitalAngle += this.orbitalDirection * GAME_CONFIG.PLAYER_ORBITAL_ANGULAR_SPEED * deltaSeconds;
-
-            // Calculate target orbital position
-            const targetX = nearestEnemy.x + Math.cos(this.orbitalAngle) * GAME_CONFIG.PLAYER_ORBITAL_RANGE;
-            const targetY = nearestEnemy.y + Math.sin(this.orbitalAngle) * GAME_CONFIG.PLAYER_ORBITAL_RANGE;
-
-            // Move toward orbital position
-            const angle = Phaser.Math.Angle.Between(
+            // Calculate current distance to enemy
+            const currentDistance = Phaser.Math.Distance.Between(
                 this.player.x, this.player.y,
-                targetX, targetY
+                nearestEnemy.x, nearestEnemy.y
             );
 
+            // Current angle from enemy to player (based on actual position)
+            const currentAngle = Phaser.Math.Angle.Between(
+                nearestEnemy.x, nearestEnemy.y,
+                this.player.x, this.player.y
+            );
+
+            // Tangential direction (perpendicular to radial, based on orbital direction)
+            const tangentAngle = currentAngle + (this.orbitalDirection * Math.PI / 2);
+
+            // Calculate tangential velocity components
+            const tangentVelX = Math.cos(tangentAngle) * GAME_CONFIG.PLAYER_ORBITAL_SPEED;
+            const tangentVelY = Math.sin(tangentAngle) * GAME_CONFIG.PLAYER_ORBITAL_SPEED;
+
+            // Check if the wall is blocking our tangential movement direction
+            // Only reverse if the wall blocks the direction we're trying to orbit
+            const blocked = this.player.body.blocked;
+            const movingLeft = tangentVelX < -10;
+            const movingRight = tangentVelX > 10;
+            const movingUp = tangentVelY < -10;
+            const movingDown = tangentVelY > 10;
+
+            const tangentBlocked = (movingLeft && blocked.left) ||
+                                   (movingRight && blocked.right) ||
+                                   (movingUp && blocked.up) ||
+                                   (movingDown && blocked.down);
+
+            // Only reverse direction when tangential movement is blocked (edge detection)
+            if (tangentBlocked && !this.wasOrbitalBlocked) {
+                this.orbitalDirection *= -1;
+                console.log('>>> WALL BLOCKED ORBIT! Reversed to', this.orbitalDirection);
+            }
+            this.wasOrbitalBlocked = tangentBlocked;
+
+            // Radial correction: push outward if too close, inward if too far
+            const distanceError = GAME_CONFIG.PLAYER_ORBITAL_RANGE - currentDistance;
+            const radialSpeed = distanceError * 2; // Proportional correction
+            const radialVelX = Math.cos(currentAngle) * radialSpeed;
+            const radialVelY = Math.sin(currentAngle) * radialSpeed;
+
+            // Recalculate tangent velocity with potentially reversed direction
+            const newTangentAngle = currentAngle + (this.orbitalDirection * Math.PI / 2);
+            const newTangentVelX = Math.cos(newTangentAngle) * GAME_CONFIG.PLAYER_ORBITAL_SPEED;
+            const newTangentVelY = Math.sin(newTangentAngle) * GAME_CONFIG.PLAYER_ORBITAL_SPEED;
+
             this.player.setVelocity(
-                Math.cos(angle) * GAME_CONFIG.PLAYER_ORBITAL_SPEED,
-                Math.sin(angle) * GAME_CONFIG.PLAYER_ORBITAL_SPEED
+                newTangentVelX + radialVelX,
+                newTangentVelY + radialVelY
             );
 
             // Clear any pathfinding data

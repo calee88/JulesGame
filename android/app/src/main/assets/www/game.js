@@ -899,16 +899,37 @@ class GameScene extends Phaser.Scene {
             const targetX = nearestEnemy.x + Math.cos(this.orbitalAngle) * GAME_CONFIG.PLAYER_ORBITAL_RANGE;
             const targetY = nearestEnemy.y + Math.sin(this.orbitalAngle) * GAME_CONFIG.PLAYER_ORBITAL_RANGE;
 
-            // Move toward orbital position
-            const angle = Phaser.Math.Angle.Between(
-                this.player.x, this.player.y,
-                targetX, targetY
-            );
+            // Check if next orbital position is blocked (wall collision)
+            if (this.isPointBlocked(targetX, targetY)) {
+                // Reverse orbital direction when hitting a wall
+                this.orbitalDirection *= -1;
+                // Recalculate target position with reversed direction
+                this.orbitalAngle += this.orbitalDirection * GAME_CONFIG.PLAYER_ORBITAL_ANGULAR_SPEED * deltaSeconds * 2;
+                const newTargetX = nearestEnemy.x + Math.cos(this.orbitalAngle) * GAME_CONFIG.PLAYER_ORBITAL_RANGE;
+                const newTargetY = nearestEnemy.y + Math.sin(this.orbitalAngle) * GAME_CONFIG.PLAYER_ORBITAL_RANGE;
 
-            this.player.setVelocity(
-                Math.cos(angle) * GAME_CONFIG.PLAYER_ORBITAL_SPEED,
-                Math.sin(angle) * GAME_CONFIG.PLAYER_ORBITAL_SPEED
-            );
+                // Move toward new orbital position
+                const angle = Phaser.Math.Angle.Between(
+                    this.player.x, this.player.y,
+                    newTargetX, newTargetY
+                );
+
+                this.player.setVelocity(
+                    Math.cos(angle) * GAME_CONFIG.PLAYER_ORBITAL_SPEED,
+                    Math.sin(angle) * GAME_CONFIG.PLAYER_ORBITAL_SPEED
+                );
+            } else {
+                // Move toward orbital position
+                const angle = Phaser.Math.Angle.Between(
+                    this.player.x, this.player.y,
+                    targetX, targetY
+                );
+
+                this.player.setVelocity(
+                    Math.cos(angle) * GAME_CONFIG.PLAYER_ORBITAL_SPEED,
+                    Math.sin(angle) * GAME_CONFIG.PLAYER_ORBITAL_SPEED
+                );
+            }
 
             // Clear any pathfinding data
             this.playerPath = null;

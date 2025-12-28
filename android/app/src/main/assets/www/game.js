@@ -1196,37 +1196,38 @@ class GameScene extends Phaser.Scene {
                 // Don't shoot while dodging
                 if (enemy.isDodging) return;
 
-                const distance = Phaser.Math.Distance.Between(
-                    enemy.x, enemy.y,
-                    this.player.x, this.player.y
-                );
+                // If already casting, finish the cast regardless of distance
+                if (enemy.isCasting) {
+                    // Check if cast is complete
+                    if (time - enemy.castStartTime >= GAME_CONFIG.ENEMY_CAST_TIME) {
+                        // Fire the bullet
+                        const angle = Phaser.Math.Angle.Between(
+                            enemy.x, enemy.y,
+                            this.player.x, this.player.y
+                        );
 
-                // Handle shooting with cast time when within stop distance
-                if (distance <= enemy.stopDistance) {
-                    if (enemy.isCasting) {
-                        // Check if cast is complete
-                        if (time - enemy.castStartTime >= GAME_CONFIG.ENEMY_CAST_TIME) {
-                            // Fire the bullet
-                            const angle = Phaser.Math.Angle.Between(
-                                enemy.x, enemy.y,
-                                this.player.x, this.player.y
-                            );
+                        const bullet = this.enemyBullets.create(enemy.x, enemy.y, 'enemyBullet');
+                        bullet.setVelocity(
+                            Math.cos(angle) * GAME_CONFIG.ENEMY_BULLET_SPEED,
+                            Math.sin(angle) * GAME_CONFIG.ENEMY_BULLET_SPEED
+                        );
 
-                            const bullet = this.enemyBullets.create(enemy.x, enemy.y, 'enemyBullet');
-                            bullet.setVelocity(
-                                Math.cos(angle) * GAME_CONFIG.ENEMY_BULLET_SPEED,
-                                Math.sin(angle) * GAME_CONFIG.ENEMY_BULLET_SPEED
-                            );
-
-                            // Reset cast state
-                            enemy.isCasting = false;
-                            enemy.lastFired = time;
-                            enemy.castIndicator.setVisible(false);
-                        } else {
-                            // Update cast indicator position
-                            enemy.castIndicator.setPosition(enemy.x, enemy.y);
-                        }
+                        // Reset cast state
+                        enemy.isCasting = false;
+                        enemy.lastFired = time;
+                        enemy.castIndicator.setVisible(false);
                     } else {
+                        // Update cast indicator position
+                        enemy.castIndicator.setPosition(enemy.x, enemy.y);
+                    }
+                } else {
+                    // Only start casting when within stop distance
+                    const distance = Phaser.Math.Distance.Between(
+                        enemy.x, enemy.y,
+                        this.player.x, this.player.y
+                    );
+
+                    if (distance <= enemy.stopDistance) {
                         // Start casting if ready to fire
                         if (time - enemy.lastFired > GAME_CONFIG.ENEMY_FIRE_RATE) {
                             enemy.isCasting = true;
@@ -1234,12 +1235,6 @@ class GameScene extends Phaser.Scene {
                             enemy.castIndicator.setPosition(enemy.x, enemy.y);
                             enemy.castIndicator.setVisible(true);
                         }
-                    }
-                } else {
-                    // Cancel cast if moving away
-                    if (enemy.isCasting) {
-                        enemy.isCasting = false;
-                        enemy.castIndicator.setVisible(false);
                     }
                 }
             }

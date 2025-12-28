@@ -1135,12 +1135,8 @@ class GameScene extends Phaser.Scene {
                         this.player.x, this.player.y
                     );
 
-                    // Minimum distance before stopping - keep moving if very close
-                    // to ensure collision detection works properly
-                    const minCollisionDistance = GAME_CONFIG.PLAYER_SIZE + GAME_CONFIG.ENEMY_SIZE;
-
-                    // Move if farther than stop distance OR if very close (within collision range)
-                    if (distance > enemy.stopDistance || distance < minCollisionDistance) {
+                    // Only move if farther than stop distance
+                    if (distance > enemy.stopDistance) {
                         const angle = Phaser.Math.Angle.Between(
                             enemy.x, enemy.y,
                             this.player.x, this.player.y
@@ -1151,7 +1147,7 @@ class GameScene extends Phaser.Scene {
                             Math.sin(angle) * GAME_CONFIG.ENEMY_SPEED
                         );
                     } else {
-                        // Stop moving when at shooting range (between minCollisionDistance and stopDistance)
+                        // Stop moving when close enough
                         enemy.setVelocity(0, 0);
                     }
                 } else {

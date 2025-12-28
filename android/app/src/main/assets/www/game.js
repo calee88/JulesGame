@@ -22,6 +22,7 @@ const GAME_CONFIG = {
     ENEMY_SPAWN_MARGIN: 100,
     ENEMY_STOP_DISTANCE_MIN: 150,
     ENEMY_STOP_DISTANCE_MAX: 250,
+    ENEMY_RESUME_BUFFER: 50,              // Extra distance needed to resume chasing after stopping
     ENEMY_FIRE_RATE: 1000,
     ENEMY_CAST_TIME: 500,
     ENEMY_BULLET_SPEED: 400,
@@ -529,6 +530,9 @@ class GameScene extends Phaser.Scene {
             enemy.isAggro = false;
             enemy.patrolPoints = enemyData.patrol || [{ x: enemyData.x, y: enemyData.y }];
             enemy.currentPatrolIndex = 0;
+
+            // Shooting range state (for hysteresis)
+            enemy.isInShootingRange = false;
 
             // Create cast indicator for this enemy
             const castIndicator = this.add.graphics();
@@ -1135,20 +1139,39 @@ class GameScene extends Phaser.Scene {
                         this.player.x, this.player.y
                     );
 
-                    // Only move if farther than stop distance
-                    if (distance > enemy.stopDistance) {
-                        const angle = Phaser.Math.Angle.Between(
-                            enemy.x, enemy.y,
-                            this.player.x, this.player.y
-                        );
-
-                        enemy.setVelocity(
-                            Math.cos(angle) * GAME_CONFIG.ENEMY_SPEED,
-                            Math.sin(angle) * GAME_CONFIG.ENEMY_SPEED
-                        );
+                    // Use hysteresis to prevent oscillation at stopDistance boundary
+                    if (enemy.isInShootingRange) {
+                        // Already in shooting range - only resume chasing if player moves far enough away
+                        if (distance > enemy.stopDistance + GAME_CONFIG.ENEMY_RESUME_BUFFER) {
+                            enemy.isInShootingRange = false;
+                            const angle = Phaser.Math.Angle.Between(
+                                enemy.x, enemy.y,
+                                this.player.x, this.player.y
+                            );
+                            enemy.setVelocity(
+                                Math.cos(angle) * GAME_CONFIG.ENEMY_SPEED,
+                                Math.sin(angle) * GAME_CONFIG.ENEMY_SPEED
+                            );
+                        } else {
+                            // Stay stopped in shooting range
+                            enemy.setVelocity(0, 0);
+                        }
                     } else {
-                        // Stop moving when close enough
-                        enemy.setVelocity(0, 0);
+                        // Not in shooting range - chase until reaching stopDistance
+                        if (distance > enemy.stopDistance) {
+                            const angle = Phaser.Math.Angle.Between(
+                                enemy.x, enemy.y,
+                                this.player.x, this.player.y
+                            );
+                            enemy.setVelocity(
+                                Math.cos(angle) * GAME_CONFIG.ENEMY_SPEED,
+                                Math.sin(angle) * GAME_CONFIG.ENEMY_SPEED
+                            );
+                        } else {
+                            // Reached shooting range
+                            enemy.isInShootingRange = true;
+                            enemy.setVelocity(0, 0);
+                        }
                     }
                 } else {
                     // Patrol behavior

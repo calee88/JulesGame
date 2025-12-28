@@ -11,6 +11,7 @@ const GAME_CONFIG = {
     PLAYER_COLOR: 0x00d4ff,
     PLAYER_SIZE: 32,
     PLAYER_ORBITAL_RANGE: 200,
+    PLAYER_ORBITAL_EXIT_BUFFER: 30,   // Extra distance before exiting orbital mode (hysteresis)
     PLAYER_ORBITAL_SPEED: 180,
     PLAYER_ORBITAL_ANGULAR_SPEED: 1.5, // radians per second
 
@@ -22,6 +23,7 @@ const GAME_CONFIG = {
     ENEMY_SPAWN_MARGIN: 100,
     ENEMY_STOP_DISTANCE_MIN: 150,
     ENEMY_STOP_DISTANCE_MAX: 250,
+    ENEMY_RESUME_BUFFER: 50,              // Extra distance needed to resume chasing after stopping
     ENEMY_FIRE_RATE: 1000,
     ENEMY_CAST_TIME: 500,
     ENEMY_BULLET_SPEED: 400,
@@ -78,6 +80,10 @@ const GAME_CONFIG = {
 
     // Map
     MAP_FILE: 'map1.json',
+    AVAILABLE_MAPS: [
+        { file: 'map1.json', name: 'Level 1' },
+        { file: 'debug_map.json', name: 'Debug (1 enemy, no walls)' }
+    ],
     GRID_SIZE: 32, // Size of pathfinding grid cells
     ENEMY_AGGRO_RANGE: 400, // Distance at which enemies activate chase/dodge/shoot
     ENEMY_PATROL_SPEED: 80,
@@ -98,11 +104,65 @@ const GAME_CONFIG = {
 };
 
 // ============================================================================
+// MENU SCENE - Map Selection
+// ============================================================================
+class MenuScene extends Phaser.Scene {
+    constructor() {
+        super('menu-scene');
+    }
+
+    create() {
+        const { width, height } = this.scale;
+
+        // Title
+        this.add.text(width / 2, height * 0.2, 'Select Map', {
+            fontSize: '48px',
+            fill: '#ffffff',
+            fontFamily: 'Arial'
+        }).setOrigin(0.5);
+
+        // Create buttons for each map
+        const buttonStartY = height * 0.4;
+        const buttonSpacing = 80;
+
+        GAME_CONFIG.AVAILABLE_MAPS.forEach((mapInfo, index) => {
+            const buttonY = buttonStartY + (index * buttonSpacing);
+
+            // Button background
+            const button = this.add.rectangle(width / 2, buttonY, 400, 60, 0x4a4a6e)
+                .setInteractive({ useHandCursor: true })
+                .on('pointerover', () => button.setFillStyle(0x6a6a8e))
+                .on('pointerout', () => button.setFillStyle(0x4a4a6e))
+                .on('pointerdown', () => {
+                    this.scene.start('game-scene', { mapFile: mapInfo.file });
+                });
+
+            // Button text
+            this.add.text(width / 2, buttonY, mapInfo.name, {
+                fontSize: '24px',
+                fill: '#ffffff',
+                fontFamily: 'Arial'
+            }).setOrigin(0.5);
+        });
+    }
+}
+
+// ============================================================================
 // GAME SCENE
 // ============================================================================
 class GameScene extends Phaser.Scene {
     constructor() {
         super('game-scene');
+        this.selectedMapFile = GAME_CONFIG.MAP_FILE; // Default map
+    }
+
+    /**
+     * Init: Called when scene starts, receives data from previous scene
+     */
+    init(data) {
+        if (data && data.mapFile) {
+            this.selectedMapFile = data.mapFile;
+        }
         this.initializeState();
     }
 
@@ -169,6 +229,10 @@ class GameScene extends Phaser.Scene {
         this.modeText = null;
         this.zoneAttack = null;
         this.zoneDodge = null;
+
+        // Debug visualization
+        this.debugGraphics = null;
+        this.debugDistanceText = null;
     }
 
     /**
@@ -183,8 +247,8 @@ class GameScene extends Phaser.Scene {
         this.generateWall();
         this.generateFloor();
 
-        // Load map data
-        this.load.json('mapData', GAME_CONFIG.MAP_FILE);
+        // Load map data (use selected map from menu)
+        this.load.json('mapData', this.selectedMapFile);
     }
 
     generateBackground() {
@@ -428,6 +492,21 @@ class GameScene extends Phaser.Scene {
         })
         .setOrigin(0.5)
         .setScrollFactor(0);
+
+        // Debug visualization (only for debug map with no walls)
+        if (this.mapData.walls.length === 0) {
+            this.debugGraphics = this.add.graphics();
+            this.debugGraphics.setDepth(200);
+
+            this.debugDistanceText = this.add.text(width / 2, 100, 'Distance: --', {
+                fontSize: '24px',
+                fill: '#ffff00',
+                backgroundColor: '#000000',
+                padding: { x: 10, y: 5 }
+            })
+            .setOrigin(0.5)
+            .setScrollFactor(0);
+        }
     }
 
     setupInputZones(width, height) {
@@ -529,6 +608,9 @@ class GameScene extends Phaser.Scene {
             enemy.isAggro = false;
             enemy.patrolPoints = enemyData.patrol || [{ x: enemyData.x, y: enemyData.y }];
             enemy.currentPatrolIndex = 0;
+
+            // Shooting range state (for hysteresis)
+            enemy.isInShootingRange = false;
 
             // Create cast indicator for this enemy
             const castIndicator = this.add.graphics();
@@ -875,15 +957,28 @@ class GameScene extends Phaser.Scene {
         }
 
         // Check if we should orbit or approach
-        if (nearestDistance <= GAME_CONFIG.PLAYER_ORBITAL_RANGE) {
+        // Use hysteresis to prevent oscillation at orbital boundary
+        const isDebugMap = this.mapData.walls.length === 0;
+        const orbitExitDistance = GAME_CONFIG.PLAYER_ORBITAL_RANGE + GAME_CONFIG.PLAYER_ORBITAL_EXIT_BUFFER;
+
+        // Enter orbit at ORBITAL_RANGE, exit only when beyond ORBITAL_RANGE + buffer
+        const shouldOrbit = nearestDistance <= GAME_CONFIG.PLAYER_ORBITAL_RANGE ||
+                           (this.isOrbiting && nearestDistance <= orbitExitDistance);
+
+        if (shouldOrbit) {
             // Enter orbital mode
             if (!this.isOrbiting) {
                 this.isOrbiting = true;
-                // Choose direction with more clearance (longer to hit wall)
-                this.orbitalDirection = this.chooseOrbitalDirection(
-                    this.player.x, this.player.y,
-                    nearestEnemy.x, nearestEnemy.y
-                );
+                // If no walls (debug map), use fixed direction; otherwise choose based on clearance
+                if (isDebugMap) {
+                    this.orbitalDirection = 1; // Fixed counterclockwise for debug
+                } else {
+                    // Choose direction with more clearance (longer to hit wall)
+                    this.orbitalDirection = this.chooseOrbitalDirection(
+                        this.player.x, this.player.y,
+                        nearestEnemy.x, nearestEnemy.y
+                    );
+                }
             }
 
             // Calculate current distance to enemy
@@ -926,6 +1021,7 @@ class GameScene extends Phaser.Scene {
             this.wasOrbitalBlocked = tangentBlocked;
 
             // Radial correction: push outward if too close, inward if too far
+            // This provides the centripetal acceleration needed for circular motion
             const distanceError = GAME_CONFIG.PLAYER_ORBITAL_RANGE - currentDistance;
             const radialSpeed = distanceError * 2; // Proportional correction
             const radialVelX = Math.cos(currentAngle) * radialSpeed;
@@ -940,6 +1036,32 @@ class GameScene extends Phaser.Scene {
                 newTangentVelX + radialVelX,
                 newTangentVelY + radialVelY
             );
+
+            // Debug visualization: draw line and show distance
+            if (this.debugGraphics && isDebugMap) {
+                this.debugGraphics.clear();
+                // Draw line from player to enemy
+                this.debugGraphics.lineStyle(2, 0x00ff00, 1);
+                this.debugGraphics.beginPath();
+                this.debugGraphics.moveTo(this.player.x, this.player.y);
+                this.debugGraphics.lineTo(nearestEnemy.x, nearestEnemy.y);
+                this.debugGraphics.strokePath();
+
+                // Draw orbital range circle around enemy
+                this.debugGraphics.lineStyle(1, 0xffff00, 0.5);
+                this.debugGraphics.strokeCircle(nearestEnemy.x, nearestEnemy.y, GAME_CONFIG.PLAYER_ORBITAL_RANGE);
+
+                // Update distance text
+                this.debugDistanceText.setText(`Distance: ${currentDistance.toFixed(1)}`);
+
+                // Log to console periodically (every 60 frames ~ 1 second)
+                if (!this.debugLogCounter) this.debugLogCounter = 0;
+                this.debugLogCounter++;
+                if (this.debugLogCounter >= 60) {
+                    console.log(`Orbital Distance: ${currentDistance.toFixed(1)} | Target: ${GAME_CONFIG.PLAYER_ORBITAL_RANGE}`);
+                    this.debugLogCounter = 0;
+                }
+            }
 
             // Clear any pathfinding data
             this.playerPath = null;
@@ -1135,20 +1257,55 @@ class GameScene extends Phaser.Scene {
                         this.player.x, this.player.y
                     );
 
-                    // Only move if farther than stop distance
-                    if (distance > enemy.stopDistance) {
-                        const angle = Phaser.Math.Angle.Between(
-                            enemy.x, enemy.y,
-                            this.player.x, this.player.y
-                        );
+                    // Check if fire rate cooldown has passed
+                    const canFire = (this.time.now - enemy.lastFired) > GAME_CONFIG.ENEMY_FIRE_RATE;
 
-                        enemy.setVelocity(
-                            Math.cos(angle) * GAME_CONFIG.ENEMY_SPEED,
-                            Math.sin(angle) * GAME_CONFIG.ENEMY_SPEED
-                        );
+                    // Use hysteresis to prevent oscillation at stopDistance boundary
+                    // But only apply buffer while waiting for cooldown
+                    if (enemy.isInShootingRange) {
+                        // If cooldown ready but out of stopDistance, resume chasing immediately
+                        if (canFire && distance > enemy.stopDistance) {
+                            enemy.isInShootingRange = false;
+                            const angle = Phaser.Math.Angle.Between(
+                                enemy.x, enemy.y,
+                                this.player.x, this.player.y
+                            );
+                            enemy.setVelocity(
+                                Math.cos(angle) * GAME_CONFIG.ENEMY_SPEED,
+                                Math.sin(angle) * GAME_CONFIG.ENEMY_SPEED
+                            );
+                        }
+                        // If still in cooldown, use buffer to prevent oscillation
+                        else if (distance > enemy.stopDistance + GAME_CONFIG.ENEMY_RESUME_BUFFER) {
+                            enemy.isInShootingRange = false;
+                            const angle = Phaser.Math.Angle.Between(
+                                enemy.x, enemy.y,
+                                this.player.x, this.player.y
+                            );
+                            enemy.setVelocity(
+                                Math.cos(angle) * GAME_CONFIG.ENEMY_SPEED,
+                                Math.sin(angle) * GAME_CONFIG.ENEMY_SPEED
+                            );
+                        } else {
+                            // Stay stopped in shooting range
+                            enemy.setVelocity(0, 0);
+                        }
                     } else {
-                        // Stop moving when close enough
-                        enemy.setVelocity(0, 0);
+                        // Not in shooting range - chase until reaching stopDistance
+                        if (distance > enemy.stopDistance) {
+                            const angle = Phaser.Math.Angle.Between(
+                                enemy.x, enemy.y,
+                                this.player.x, this.player.y
+                            );
+                            enemy.setVelocity(
+                                Math.cos(angle) * GAME_CONFIG.ENEMY_SPEED,
+                                Math.sin(angle) * GAME_CONFIG.ENEMY_SPEED
+                            );
+                        } else {
+                            // Reached shooting range
+                            enemy.isInShootingRange = true;
+                            enemy.setVelocity(0, 0);
+                        }
                     }
                 } else {
                     // Patrol behavior
@@ -1667,7 +1824,7 @@ const config = {
         }
     },
     backgroundColor: '#1a1a2e',
-    scene: GameScene
+    scene: [MenuScene, GameScene]
 };
 
 const game = new Phaser.Game(config);

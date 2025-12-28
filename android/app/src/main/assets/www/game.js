@@ -941,11 +941,16 @@ class GameScene extends Phaser.Scene {
             // Enter orbital mode
             if (!this.isOrbiting) {
                 this.isOrbiting = true;
-                // Choose direction with more clearance (longer to hit wall)
-                this.orbitalDirection = this.chooseOrbitalDirection(
-                    this.player.x, this.player.y,
-                    nearestEnemy.x, nearestEnemy.y
-                );
+                // If no walls (debug map), use fixed direction; otherwise choose based on clearance
+                if (this.mapData.walls.length === 0) {
+                    this.orbitalDirection = 1; // Fixed counterclockwise for debug
+                } else {
+                    // Choose direction with more clearance (longer to hit wall)
+                    this.orbitalDirection = this.chooseOrbitalDirection(
+                        this.player.x, this.player.y,
+                        nearestEnemy.x, nearestEnemy.y
+                    );
+                }
             }
 
             // Calculate current distance to enemy

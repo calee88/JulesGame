@@ -442,7 +442,7 @@ class GameScene extends Phaser.Scene {
         this.physics.add.overlap(this.player, this.enemyBullets, this.handleEnemyBulletHitPlayer, null, this);
 
         // Add wall collisions
-        this.physics.add.collider(this.player, this.walls, this.handlePlayerHitWall, null, this);
+        this.physics.add.collider(this.player, this.walls);
         this.physics.add.collider(this.enemies, this.walls);
         this.physics.add.collider(this.bullets, this.walls, (bullet, wall) => bullet.destroy());
         this.physics.add.collider(this.enemyBullets, this.walls, (bullet, wall) => bullet.destroy());
@@ -889,6 +889,17 @@ class GameScene extends Phaser.Scene {
                     nearestEnemy.x, nearestEnemy.y,
                     this.player.x, this.player.y
                 );
+            }
+
+            // Check if player is blocked by a wall (touching any side)
+            const touchingWall = this.player.body.blocked.up ||
+                                this.player.body.blocked.down ||
+                                this.player.body.blocked.left ||
+                                this.player.body.blocked.right;
+
+            if (touchingWall) {
+                // Reverse orbital direction when hitting a wall
+                this.orbitalDirection *= -1;
             }
 
             // Update orbital angle (convert angular speed to per-frame)
@@ -1340,16 +1351,6 @@ class GameScene extends Phaser.Scene {
             backgroundColor: '#000000',
             padding: { x: 20, y: 20 }
         });
-    }
-
-    /**
-     * Handle player hitting wall during orbital movement
-     */
-    handlePlayerHitWall(player, wall) {
-        // Only reverse direction if we're in orbital mode
-        if (this.isOrbiting) {
-            this.orbitalDirection *= -1;
-        }
     }
 
     /**

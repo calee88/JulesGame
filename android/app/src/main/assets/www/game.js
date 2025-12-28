@@ -1257,10 +1257,26 @@ class GameScene extends Phaser.Scene {
                         this.player.x, this.player.y
                     );
 
+                    // Check if fire rate cooldown has passed
+                    const canFire = (this.time.now - enemy.lastFired) > GAME_CONFIG.ENEMY_FIRE_RATE;
+
                     // Use hysteresis to prevent oscillation at stopDistance boundary
+                    // But only apply buffer while waiting for cooldown
                     if (enemy.isInShootingRange) {
-                        // Already in shooting range - only resume chasing if player moves far enough away
-                        if (distance > enemy.stopDistance + GAME_CONFIG.ENEMY_RESUME_BUFFER) {
+                        // If cooldown ready but out of stopDistance, resume chasing immediately
+                        if (canFire && distance > enemy.stopDistance) {
+                            enemy.isInShootingRange = false;
+                            const angle = Phaser.Math.Angle.Between(
+                                enemy.x, enemy.y,
+                                this.player.x, this.player.y
+                            );
+                            enemy.setVelocity(
+                                Math.cos(angle) * GAME_CONFIG.ENEMY_SPEED,
+                                Math.sin(angle) * GAME_CONFIG.ENEMY_SPEED
+                            );
+                        }
+                        // If still in cooldown, use buffer to prevent oscillation
+                        else if (distance > enemy.stopDistance + GAME_CONFIG.ENEMY_RESUME_BUFFER) {
                             enemy.isInShootingRange = false;
                             const angle = Phaser.Math.Angle.Between(
                                 enemy.x, enemy.y,

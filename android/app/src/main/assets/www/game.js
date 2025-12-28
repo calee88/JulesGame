@@ -1344,9 +1344,10 @@ class GameScene extends Phaser.Scene {
         const buttonX = width - buttonSize - 20;
         const buttonY = height - buttonSize - 180; // Above dodge zone
 
-        // Create button background
-        const buttonBg = this.add.circle(buttonX, buttonY, buttonSize / 2, 0xff0000, 0.3)
+        // Create button background (depth 200 to be above all game elements)
+        const buttonBg = this.add.circle(buttonX, buttonY, buttonSize / 2, 0xff0000, 0.5)
             .setScrollFactor(0)
+            .setDepth(200)
             .setInteractive();
 
         // Create button border
@@ -1354,6 +1355,7 @@ class GameScene extends Phaser.Scene {
         buttonBorder.lineStyle(4, 0xff0000, 1);
         buttonBorder.strokeCircle(buttonX, buttonY, buttonSize / 2);
         buttonBorder.setScrollFactor(0);
+        buttonBorder.setDepth(200);
 
         // Create button label
         const buttonLabel = this.add.text(buttonX, buttonY, 'FIRE', {
@@ -1362,7 +1364,8 @@ class GameScene extends Phaser.Scene {
             fontStyle: 'bold'
         })
         .setOrigin(0.5)
-        .setScrollFactor(0);
+        .setScrollFactor(0)
+        .setDepth(201);
 
         // Store references
         this.zoneAttack = buttonBg;
@@ -1370,18 +1373,18 @@ class GameScene extends Phaser.Scene {
 
         buttonBg.on('pointerdown', () => {
             // Visual feedback
-            buttonBg.setAlpha(0.6);
+            buttonBg.setAlpha(0.8);
         });
 
         buttonBg.on('pointerup', () => {
-            buttonBg.setAlpha(0.3);
+            buttonBg.setAlpha(0.5);
             if (!this.isSwipeGesture) {
                 this.fireBullet();
             }
         });
 
         buttonBg.on('pointerout', () => {
-            buttonBg.setAlpha(0.3);
+            buttonBg.setAlpha(0.5);
         });
     }
 

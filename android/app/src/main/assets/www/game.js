@@ -1337,54 +1337,22 @@ class GameScene extends Phaser.Scene {
     }
 
     /**
-     * Create attack button (visible button overlay)
+     * Create attack zone (invisible zone from 1/2 to 3/4 of screen height)
      */
     createAttackZone(width, height) {
-        const buttonSize = 100;
-        const buttonX = width - buttonSize - 20;
-        const buttonY = height - buttonSize - 180; // Above dodge zone
+        const zoneHeight = height * GAME_CONFIG.ZONE_HEIGHT_RATIO;
+        const zoneY = height * GAME_CONFIG.ATTACK_ZONE_Y;
 
-        // Create button background (depth 200 to be above all game elements)
-        const buttonBg = this.add.circle(buttonX, buttonY, buttonSize / 2, 0xff0000, 0.5)
+        this.zoneAttack = this.add.zone(width / 2, zoneY, width, zoneHeight)
+            .setOrigin(0.5)
             .setScrollFactor(0)
-            .setDepth(200)
             .setInteractive();
 
-        // Create button border
-        const buttonBorder = this.add.graphics();
-        buttonBorder.lineStyle(4, 0xff0000, 1);
-        buttonBorder.strokeCircle(buttonX, buttonY, buttonSize / 2);
-        buttonBorder.setScrollFactor(0);
-        buttonBorder.setDepth(200);
-
-        // Create button label
-        const buttonLabel = this.add.text(buttonX, buttonY, 'FIRE', {
-            fontSize: '24px',
-            fill: '#fff',
-            fontStyle: 'bold'
-        })
-        .setOrigin(0.5)
-        .setScrollFactor(0)
-        .setDepth(201);
-
-        // Store references
-        this.zoneAttack = buttonBg;
-        this.attackButton = { bg: buttonBg, border: buttonBorder, label: buttonLabel };
-
-        buttonBg.on('pointerdown', () => {
-            // Visual feedback
-            buttonBg.setAlpha(0.8);
-        });
-
-        buttonBg.on('pointerup', () => {
-            buttonBg.setAlpha(0.5);
+        this.zoneAttack.on('pointerup', () => {
             if (!this.isSwipeGesture) {
                 this.fireBullet();
+                this.flashZone(zoneY - zoneHeight / 2, zoneHeight, GAME_CONFIG.ATTACK_FLASH_COLOR);
             }
-        });
-
-        buttonBg.on('pointerout', () => {
-            buttonBg.setAlpha(0.5);
         });
     }
 
@@ -1461,16 +1429,10 @@ class GameScene extends Phaser.Scene {
             this.modeText.setPosition(width / 2, 50);
         }
 
-        if (this.attackButton) {
-            const buttonSize = 100;
-            const buttonX = width - buttonSize - 20;
-            const buttonY = height - buttonSize - 180;
-
-            this.attackButton.bg.setPosition(buttonX, buttonY);
-            this.attackButton.border.clear();
-            this.attackButton.border.lineStyle(4, 0xff0000, 1);
-            this.attackButton.border.strokeCircle(buttonX, buttonY, buttonSize / 2);
-            this.attackButton.label.setPosition(buttonX, buttonY);
+        if (this.zoneAttack) {
+            const zoneHeight = height * GAME_CONFIG.ZONE_HEIGHT_RATIO;
+            this.zoneAttack.setSize(width, zoneHeight)
+                .setPosition(width / 2, height * GAME_CONFIG.ATTACK_ZONE_Y);
         }
 
         if (this.zoneDodge) {

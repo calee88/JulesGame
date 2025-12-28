@@ -10,6 +10,9 @@ const GAME_CONFIG = {
     PLAYER_START_X_RATIO: 0.5,
     PLAYER_COLOR: 0x00d4ff,
     PLAYER_SIZE: 32,
+    PLAYER_ORBITAL_RANGE: 200,
+    PLAYER_ORBITAL_SPEED: 180,
+    PLAYER_ORBITAL_ANGULAR_SPEED: 1.5, // radians per second
 
     // Enemy
     ENEMY_SPEED: 150,
@@ -144,6 +147,11 @@ class GameScene extends Phaser.Scene {
         this.stuckCheckTimer = 0;
         this.stuckCheckInterval = 1000; // Check every 1000ms (less aggressive)
         this.pathGraphics = null; // Visual debugging for path
+
+        // Orbital Movement System
+        this.isOrbiting = false;
+        this.orbitalDirection = 1; // 1 for clockwise, -1 for counterclockwise
+        this.orbitalAngle = 0;
 
         // Win Condition
         this.totalEnemies = 0;
@@ -690,10 +698,116 @@ class GameScene extends Phaser.Scene {
     }
 
     /**
+     * Check distance to wall in a given direction from a point
+     * Returns the distance to the nearest wall (or Infinity if no wall within maxDistance)
+     */
+    getDistanceToWallInDirection(x, y, angle, maxDistance = 500) {
+        const step = GAME_CONFIG.GRID_SIZE;
+        let distance = 0;
+
+        while (distance < maxDistance) {
+            distance += step;
+            const checkX = x + Math.cos(angle) * distance;
+            const checkY = y + Math.sin(angle) * distance;
+
+            // Check if out of world bounds
+            if (checkX < 0 || checkX > this.mapData.width ||
+                checkY < 0 || checkY > this.mapData.height) {
+                return distance;
+            }
+
+            // Convert to grid coordinates
+            const gridX = Math.floor(checkX / GAME_CONFIG.GRID_SIZE);
+            const gridY = Math.floor(checkY / GAME_CONFIG.GRID_SIZE);
+
+            // Check if this grid cell is blocked
+            if (gridY >= 0 && gridY < this.pathfindingGrid.length &&
+                gridX >= 0 && gridX < this.pathfindingGrid[0].length) {
+                if (this.pathfindingGrid[gridY][gridX] === 1) {
+                    return distance;
+                }
+            }
+        }
+
+        return Infinity;
+    }
+
+    /**
+     * Check if a point is blocked (inside wall or world bounds)
+     */
+    isPointBlocked(x, y) {
+        // Check world bounds
+        if (x < 0 || x > this.mapData.width || y < 0 || y > this.mapData.height) {
+            return true;
+        }
+
+        // Convert to grid coordinates
+        const gridX = Math.floor(x / GAME_CONFIG.GRID_SIZE);
+        const gridY = Math.floor(y / GAME_CONFIG.GRID_SIZE);
+
+        // Check if this grid cell is blocked
+        if (gridY >= 0 && gridY < this.pathfindingGrid.length &&
+            gridX >= 0 && gridX < this.pathfindingGrid[0].length) {
+            return this.pathfindingGrid[gridY][gridX] === 1;
+        }
+
+        return false;
+    }
+
+    /**
+     * Choose orbital direction based on wall detection
+     * Returns 1 for clockwise, -1 for counterclockwise
+     */
+    chooseOrbitalDirection(playerX, playerY, targetX, targetY) {
+        // Calculate current angle from target to player
+        const currentAngle = Phaser.Math.Angle.Between(targetX, targetY, playerX, playerY);
+
+        // Sample points along the orbital path to see how far we can go in each direction
+        const sampleCount = 16; // Check 16 points (half circle in each direction)
+        const angleStep = Math.PI / sampleCount; // Small angular steps
+
+        let clockwiseClearCount = 0;
+        let counterclockwiseClearCount = 0;
+
+        // Check clockwise direction (negative angle)
+        for (let i = 1; i <= sampleCount; i++) {
+            const angle = currentAngle - (angleStep * i);
+            const x = targetX + Math.cos(angle) * GAME_CONFIG.PLAYER_ORBITAL_RANGE;
+            const y = targetY + Math.sin(angle) * GAME_CONFIG.PLAYER_ORBITAL_RANGE;
+
+            if (this.isPointBlocked(x, y)) {
+                break; // Stop counting when we hit a wall
+            }
+            clockwiseClearCount++;
+        }
+
+        // Check counterclockwise direction (positive angle)
+        for (let i = 1; i <= sampleCount; i++) {
+            const angle = currentAngle + (angleStep * i);
+            const x = targetX + Math.cos(angle) * GAME_CONFIG.PLAYER_ORBITAL_RANGE;
+            const y = targetY + Math.sin(angle) * GAME_CONFIG.PLAYER_ORBITAL_RANGE;
+
+            if (this.isPointBlocked(x, y)) {
+                break; // Stop counting when we hit a wall
+            }
+            counterclockwiseClearCount++;
+        }
+
+        // If both directions are equally clear (full circle or no difference), choose randomly
+        if (clockwiseClearCount === counterclockwiseClearCount) {
+            return Math.random() < 0.5 ? 1 : -1;
+        }
+
+        // Choose direction with more clearance
+        // Clockwise = 1, Counterclockwise = -1
+        return clockwiseClearCount > counterclockwiseClearCount ? 1 : -1;
+    }
+
+    /**
      * Update: Main game loop
      */
     update(time, delta) {
-        this.updatePlayerAutoWalk(time);
+        this.updatePlayerAutoWalk(time, delta);
         this.updateEnemyAggro();
         this.updateEnemyDodging(time);
         this.updateEnemyMovement();
@@ -730,9 +844,9 @@ class GameScene extends Phaser.Scene {
     }
 
     /**
-     * Auto-walk player to nearest enemy
+     * Auto-walk player to nearest enemy with orbital movement
      */
-    updatePlayerAutoWalk(time) {
+    updatePlayerAutoWalk(time, delta) {
         if (!this.player.active) return;
 
         // Find nearest enemy
@@ -755,94 +869,133 @@ class GameScene extends Phaser.Scene {
 
         if (!nearestEnemy) {
             this.player.setVelocity(0, 0);
+            this.isOrbiting = false;
             return;
         }
 
-        // Stuck detection: Check if player has moved since last check (DISABLED - causing vibration)
-        // if (time - this.stuckCheckTimer >= this.stuckCheckInterval) {
-        //     const distanceMoved = Phaser.Math.Distance.Between(
-        //         this.player.x, this.player.y,
-        //         this.lastPlayerPosition.x, this.lastPlayerPosition.y
-        //     );
+        // Check if we should orbit or approach
+        if (nearestDistance <= GAME_CONFIG.PLAYER_ORBITAL_RANGE) {
+            // Enter orbital mode
+            if (!this.isOrbiting) {
+                this.isOrbiting = true;
+                // Choose orbital direction based on wall detection
+                this.orbitalDirection = this.chooseOrbitalDirection(
+                    this.player.x, this.player.y,
+                    nearestEnemy.x, nearestEnemy.y
+                );
+                // Calculate initial angle
+                this.orbitalAngle = Phaser.Math.Angle.Between(
+                    nearestEnemy.x, nearestEnemy.y,
+                    this.player.x, this.player.y
+                );
+            }
 
-        //     // If player hasn't moved much (threshold), force path recalculation
-        //     if (distanceMoved < 30 && this.playerPath) {
-        //         this.playerPath = null; // Force recalculation
-        //     }
+            // Update orbital angle (convert angular speed to per-frame)
+            const deltaSeconds = delta / 1000;
+            this.orbitalAngle += this.orbitalDirection * GAME_CONFIG.PLAYER_ORBITAL_ANGULAR_SPEED * deltaSeconds;
 
-        //     // Update last position and timer
-        //     this.lastPlayerPosition.x = this.player.x;
-        //     this.lastPlayerPosition.y = this.player.y;
-        //     this.stuckCheckTimer = time;
-        // }
+            // Calculate target orbital position
+            const targetX = nearestEnemy.x + Math.cos(this.orbitalAngle) * GAME_CONFIG.PLAYER_ORBITAL_RANGE;
+            const targetY = nearestEnemy.y + Math.sin(this.orbitalAngle) * GAME_CONFIG.PLAYER_ORBITAL_RANGE;
 
-        // Check if we need a new path
-        if (!this.playerPath || !this.playerDestination ||
-            Phaser.Math.Distance.Between(
-                this.playerDestination.x, this.playerDestination.y,
-                nearestEnemy.x, nearestEnemy.y
-            ) > GAME_CONFIG.PLAYER_ARRIVAL_THRESHOLD * 3) {
-
-            // Set new destination and find path asynchronously
-            this.playerDestination = { x: nearestEnemy.x, y: nearestEnemy.y };
-            this.findPath(
+            // Move toward orbital position
+            const angle = Phaser.Math.Angle.Between(
                 this.player.x, this.player.y,
-                this.playerDestination.x, this.playerDestination.y,
-                (path) => {
-                    this.playerPath = path;
-                    // Skip first waypoint - it's the grid cell center where we started,
-                    // and the player has likely moved past it by now (async callback)
-                    this.currentPathIndex = (path && path.length > 1) ? 1 : 0;
-                }
-            );
-        }
-
-        // Follow path
-        if (this.playerPath && this.playerPath.length > 0) {
-            const target = this.playerPath[this.currentPathIndex];
-            const distance = Phaser.Math.Distance.Between(
-                this.player.x, this.player.y,
-                target.x, target.y
+                targetX, targetY
             );
 
-            // Check if we've reached the current waypoint OR if we've passed it
-            // (which can happen when moving diagonally or when blocked by walls)
-            const shouldAdvanceWaypoint = distance < GAME_CONFIG.PLAYER_ARRIVAL_THRESHOLD;
+            this.player.setVelocity(
+                Math.cos(angle) * GAME_CONFIG.PLAYER_ORBITAL_SPEED,
+                Math.sin(angle) * GAME_CONFIG.PLAYER_ORBITAL_SPEED
+            );
 
-            // Also check if there's a next waypoint and we're closer to it than the current one
-            // BUT only skip if we have line-of-sight to prevent skipping through walls
-            const skipCurrentWaypoint = this.currentPathIndex < this.playerPath.length - 1 &&
-                (() => {
-                    const nextTarget = this.playerPath[this.currentPathIndex + 1];
-                    const distanceToNext = Phaser.Math.Distance.Between(
-                        this.player.x, this.player.y,
-                        nextTarget.x, nextTarget.y
-                    );
-                    // Only skip if closer AND we have clear line-of-sight to next waypoint
-                    if (distanceToNext < distance) {
-                        const playerGridX = Math.floor(this.player.x / GAME_CONFIG.GRID_SIZE);
-                        const playerGridY = Math.floor(this.player.y / GAME_CONFIG.GRID_SIZE);
-                        const nextGridX = Math.floor(nextTarget.x / GAME_CONFIG.GRID_SIZE);
-                        const nextGridY = Math.floor(nextTarget.y / GAME_CONFIG.GRID_SIZE);
-                        return this.hasLineOfSight(
-                            { x: playerGridX, y: playerGridY },
-                            { x: nextGridX, y: nextGridY }
-                        );
+            // Clear any pathfinding data
+            this.playerPath = null;
+            this.playerDestination = null;
+        } else {
+            // Exit orbital mode and approach enemy
+            this.isOrbiting = false;
+
+            // Use pathfinding to approach enemy
+            // Check if we need a new path
+            if (!this.playerPath || !this.playerDestination ||
+                Phaser.Math.Distance.Between(
+                    this.playerDestination.x, this.playerDestination.y,
+                    nearestEnemy.x, nearestEnemy.y
+                ) > GAME_CONFIG.PLAYER_ARRIVAL_THRESHOLD * 3) {
+
+                // Set new destination and find path asynchronously
+                this.playerDestination = { x: nearestEnemy.x, y: nearestEnemy.y };
+                this.findPath(
+                    this.player.x, this.player.y,
+                    this.playerDestination.x, this.playerDestination.y,
+                    (path) => {
+                        this.playerPath = path;
+                        // Skip first waypoint - it's the grid cell center where we started,
+                        // and the player has likely moved past it by now (async callback)
+                        this.currentPathIndex = (path && path.length > 1) ? 1 : 0;
                     }
-                    return false;
-                })();
+                );
+            }
 
-            if (shouldAdvanceWaypoint || skipCurrentWaypoint) {
-                this.currentPathIndex++;
-                if (this.currentPathIndex >= this.playerPath.length) {
-                    // Reached end of path, recalculate
-                    this.playerPath = null;
-                }
-            } else {
-                // Move toward current waypoint
-                const angle = Phaser.Math.Angle.Between(
+            // Follow path
+            if (this.playerPath && this.playerPath.length > 0) {
+                const target = this.playerPath[this.currentPathIndex];
+                const distance = Phaser.Math.Distance.Between(
                     this.player.x, this.player.y,
                     target.x, target.y
+                );
+
+                // Check if we've reached the current waypoint OR if we've passed it
+                // (which can happen when moving diagonally or when blocked by walls)
+                const shouldAdvanceWaypoint = distance < GAME_CONFIG.PLAYER_ARRIVAL_THRESHOLD;
+
+                // Also check if there's a next waypoint and we're closer to it than the current one
+                // BUT only skip if we have line-of-sight to prevent skipping through walls
+                const skipCurrentWaypoint = this.currentPathIndex < this.playerPath.length - 1 &&
+                    (() => {
+                        const nextTarget = this.playerPath[this.currentPathIndex + 1];
+                        const distanceToNext = Phaser.Math.Distance.Between(
+                            this.player.x, this.player.y,
+                            nextTarget.x, nextTarget.y
+                        );
+                        // Only skip if closer AND we have clear line-of-sight to next waypoint
+                        if (distanceToNext < distance) {
+                            const playerGridX = Math.floor(this.player.x / GAME_CONFIG.GRID_SIZE);
+                            const playerGridY = Math.floor(this.player.y / GAME_CONFIG.GRID_SIZE);
+                            const nextGridX = Math.floor(nextTarget.x / GAME_CONFIG.GRID_SIZE);
+                            const nextGridY = Math.floor(nextTarget.y / GAME_CONFIG.GRID_SIZE);
+                            return this.hasLineOfSight(
+                                { x: playerGridX, y: playerGridY },
+                                { x: nextGridX, y: nextGridY }
+                            );
+                        }
+                        return false;
+                    })();
+
+                if (shouldAdvanceWaypoint || skipCurrentWaypoint) {
+                    this.currentPathIndex++;
+                    if (this.currentPathIndex >= this.playerPath.length) {
+                        // Reached end of path, recalculate
+                        this.playerPath = null;
+                    }
+                } else {
+                    // Move toward current waypoint
+                    const angle = Phaser.Math.Angle.Between(
+                        this.player.x, this.player.y,
+                        target.x, target.y
+                    );
+
+                    this.player.setVelocity(
+                        Math.cos(angle) * GAME_CONFIG.PLAYER_AUTO_WALK_SPEED,
+                        Math.sin(angle) * GAME_CONFIG.PLAYER_AUTO_WALK_SPEED
+                    );
+                }
+            } else {
+                // No path yet, move directly toward enemy
+                const angle = Phaser.Math.Angle.Between(
+                    this.player.x, this.player.y,
+                    nearestEnemy.x, nearestEnemy.y
                 );
 
                 this.player.setVelocity(
@@ -850,17 +1003,6 @@ class GameScene extends Phaser.Scene {
                     Math.sin(angle) * GAME_CONFIG.PLAYER_AUTO_WALK_SPEED
                 );
             }
-        } else {
-            // No path yet, move directly toward enemy
-            const angle = Phaser.Math.Angle.Between(
-                this.player.x, this.player.y,
-                nearestEnemy.x, nearestEnemy.y
-            );
-
-            this.player.setVelocity(
-                Math.cos(angle) * GAME_CONFIG.PLAYER_AUTO_WALK_SPEED,
-                Math.sin(angle) * GAME_CONFIG.PLAYER_AUTO_WALK_SPEED
-            );
         }
     }
 

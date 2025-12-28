@@ -733,6 +733,28 @@ class GameScene extends Phaser.Scene {
     }
 
     /**
+     * Check if a point is blocked (inside wall or world bounds)
+     */
+    isPointBlocked(x, y) {
+        // Check world bounds
+        if (x < 0 || x > this.mapData.width || y < 0 || y > this.mapData.height) {
+            return true;
+        }
+
+        // Convert to grid coordinates
+        const gridX = Math.floor(x / GAME_CONFIG.GRID_SIZE);
+        const gridY = Math.floor(y / GAME_CONFIG.GRID_SIZE);
+
+        // Check if this grid cell is blocked
+        if (gridY >= 0 && gridY < this.pathfindingGrid.length &&
+            gridX >= 0 && gridX < this.pathfindingGrid[0].length) {
+            return this.pathfindingGrid[gridY][gridX] === 1;
+        }
+
+        return false;
+    }
+
+    /**
      * Choose orbital direction based on wall detection
      * Returns 1 for clockwise, -1 for counterclockwise
      */
@@ -740,43 +762,45 @@ class GameScene extends Phaser.Scene {
         // Calculate current angle from target to player
         const currentAngle = Phaser.Math.Angle.Between(targetX, targetY, playerX, playerY);
 
-        // Sample multiple points along the orbital path to find total distance before hitting wall
-        const sampleCount = 8; // Check 8 points (quarter circle)
-        const angleStep = (Math.PI / 2) / sampleCount;
+        // Sample points along the orbital path to see how far we can go in each direction
+        const sampleCount = 16; // Check 16 points (half circle in each direction)
+        const angleStep = Math.PI / sampleCount; // Small angular steps
 
-        let clockwiseDistance = 0;
-        let counterclockwiseDistance = 0;
+        let clockwiseClearCount = 0;
+        let counterclockwiseClearCount = 0;
 
-        for (let i = 0; i < sampleCount; i++) {
-            // Calculate position on orbital path
-            const cwAngle = currentAngle - (angleStep * i);
-            const ccwAngle = currentAngle + (angleStep * i);
+        // Check clockwise direction (negative angle)
+        for (let i = 1; i <= sampleCount; i++) {
+            const angle = currentAngle - (angleStep * i);
+            const x = targetX + Math.cos(angle) * GAME_CONFIG.PLAYER_ORBITAL_RANGE;
+            const y = targetY + Math.sin(angle) * GAME_CONFIG.PLAYER_ORBITAL_RANGE;
 
-            const cwX = targetX + Math.cos(cwAngle) * GAME_CONFIG.PLAYER_ORBITAL_RANGE;
-            const cwY = targetY + Math.sin(cwAngle) * GAME_CONFIG.PLAYER_ORBITAL_RANGE;
-            const ccwX = targetX + Math.cos(ccwAngle) * GAME_CONFIG.PLAYER_ORBITAL_RANGE;
-            const ccwY = targetY + Math.sin(ccwAngle) * GAME_CONFIG.PLAYER_ORBITAL_RANGE;
-
-            // Check in the TANGENT direction (perpendicular to radius) - the actual movement direction
-            // For clockwise: tangent is perpendicular counter-clockwise to radius (angle - PI/2)
-            // For counter-clockwise: tangent is perpendicular clockwise to radius (angle + PI/2)
-            const cwTangentAngle = cwAngle - Math.PI / 2;
-            const ccwTangentAngle = ccwAngle + Math.PI / 2;
-
-            const cwWallDist = this.getDistanceToWallInDirection(cwX, cwY, cwTangentAngle, 300);
-            const ccwWallDist = this.getDistanceToWallInDirection(ccwX, ccwY, ccwTangentAngle, 300);
-
-            clockwiseDistance += cwWallDist === Infinity ? 1000 : cwWallDist;
-            counterclockwiseDistance += ccwWallDist === Infinity ? 1000 : ccwWallDist;
+            if (this.isPointBlocked(x, y)) {
+                break; // Stop counting when we hit a wall
+            }
+            clockwiseClearCount++;
         }
 
-        // If both directions are equally clear (no walls detected), choose randomly
-        if (clockwiseDistance === counterclockwiseDistance && clockwiseDistance >= sampleCount * 1000) {
+        // Check counterclockwise direction (positive angle)
+        for (let i = 1; i <= sampleCount; i++) {
+            const angle = currentAngle + (angleStep * i);
+            const x = targetX + Math.cos(angle) * GAME_CONFIG.PLAYER_ORBITAL_RANGE;
+            const y = targetY + Math.sin(angle) * GAME_CONFIG.PLAYER_ORBITAL_RANGE;
+
+            if (this.isPointBlocked(x, y)) {
+                break; // Stop counting when we hit a wall
+            }
+            counterclockwiseClearCount++;
+        }
+
+        // If both directions are equally clear (full circle or no difference), choose randomly
+        if (clockwiseClearCount === counterclockwiseClearCount) {
             return Math.random() < 0.5 ? 1 : -1;
         }
 
         // Choose direction with more clearance
-        return clockwiseDistance > counterclockwiseDistance ? 1 : -1;
+        // Clockwise = 1, Counterclockwise = -1
+        return clockwiseClearCount > counterclockwiseClearCount ? 1 : -1;
     }
 
     /**

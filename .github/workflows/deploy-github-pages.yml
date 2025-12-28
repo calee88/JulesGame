@@ -39,6 +39,13 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
+      - name: Update version for cache-busting
+        run: |
+          INDEX_FILE="android/app/src/main/assets/www/index.html"
+          NEW_VERSION=$(date +%s)
+          sed -i "s/game\.js?v=[0-9]*/game.js?v=${NEW_VERSION}/" "$INDEX_FILE"
+          echo "✅ Updated game.js version to: $NEW_VERSION"
+
       - name: Prepare files for deployment
         run: |
           # Copy www files to _site directory for deployment

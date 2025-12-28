@@ -11,6 +11,7 @@ const GAME_CONFIG = {
     PLAYER_COLOR: 0x00d4ff,
     PLAYER_SIZE: 32,
     PLAYER_ORBITAL_RANGE: 200,
+    PLAYER_ORBITAL_EXIT_BUFFER: 30,   // Extra distance before exiting orbital mode (hysteresis)
     PLAYER_ORBITAL_SPEED: 180,
     PLAYER_ORBITAL_ANGULAR_SPEED: 1.5, // radians per second
 
@@ -956,10 +957,13 @@ class GameScene extends Phaser.Scene {
         }
 
         // Check if we should orbit or approach
-        // In debug map (no walls), once orbiting, stay in orbit mode permanently
+        // Use hysteresis to prevent oscillation at orbital boundary
         const isDebugMap = this.mapData.walls.length === 0;
+        const orbitExitDistance = GAME_CONFIG.PLAYER_ORBITAL_RANGE + GAME_CONFIG.PLAYER_ORBITAL_EXIT_BUFFER;
+
+        // Enter orbit at ORBITAL_RANGE, exit only when beyond ORBITAL_RANGE + buffer
         const shouldOrbit = nearestDistance <= GAME_CONFIG.PLAYER_ORBITAL_RANGE ||
-                           (isDebugMap && this.isOrbiting);
+                           (this.isOrbiting && nearestDistance <= orbitExitDistance);
 
         if (shouldOrbit) {
             // Enter orbital mode

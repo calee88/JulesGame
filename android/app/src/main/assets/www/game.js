@@ -790,7 +790,9 @@ class GameScene extends Phaser.Scene {
                 this.playerDestination.x, this.playerDestination.y,
                 (path) => {
                     this.playerPath = path;
-                    this.currentPathIndex = 0;
+                    // Skip first waypoint - it's the grid cell center where we started,
+                    // and the player has likely moved past it by now (async callback)
+                    this.currentPathIndex = (path && path.length > 1) ? 1 : 0;
                 }
             );
         }

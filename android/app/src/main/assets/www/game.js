@@ -755,6 +755,56 @@ class GameScene extends Phaser.Scene {
     }
 
     /**
+     * Choose orbital direction based on wall detection
+     * Returns 1 for clockwise, -1 for counterclockwise
+     * Picks the direction with more clearance (longer to hit wall)
+     */
+    chooseOrbitalDirection(playerX, playerY, targetX, targetY) {
+        // Calculate current angle from target to player
+        const currentAngle = Phaser.Math.Angle.Between(targetX, targetY, playerX, playerY);
+
+        // Sample points along the orbital path to see how far we can go in each direction
+        const sampleCount = 16; // Check 16 points (half circle in each direction)
+        const angleStep = Math.PI / sampleCount; // Small angular steps
+
+        let clockwiseClearCount = 0;
+        let counterclockwiseClearCount = 0;
+
+        // Check clockwise direction (negative angle)
+        for (let i = 1; i <= sampleCount; i++) {
+            const angle = currentAngle - (angleStep * i);
+            const x = targetX + Math.cos(angle) * GAME_CONFIG.PLAYER_ORBITAL_RANGE;
+            const y = targetY + Math.sin(angle) * GAME_CONFIG.PLAYER_ORBITAL_RANGE;
+
+            if (this.isPointBlocked(x, y)) {
+                break; // Stop counting when we hit a wall
+            }
+            clockwiseClearCount++;
+        }
+
+        // Check counterclockwise direction (positive angle)
+        for (let i = 1; i <= sampleCount; i++) {
+            const angle = currentAngle + (angleStep * i);
+            const x = targetX + Math.cos(angle) * GAME_CONFIG.PLAYER_ORBITAL_RANGE;
+            const y = targetY + Math.sin(angle) * GAME_CONFIG.PLAYER_ORBITAL_RANGE;
+
+            if (this.isPointBlocked(x, y)) {
+                break; // Stop counting when we hit a wall
+            }
+            counterclockwiseClearCount++;
+        }
+
+        // If both directions are equally clear, choose randomly
+        if (clockwiseClearCount === counterclockwiseClearCount) {
+            return Math.random() < 0.5 ? 1 : -1;
+        }
+
+        // Choose direction with more clearance (longer to hit wall)
+        // Clockwise = -1, Counterclockwise = 1
+        return clockwiseClearCount > counterclockwiseClearCount ? -1 : 1;
+    }
+
+    /**
      * Update: Main game loop
      */
     update(time, delta) {
@@ -829,8 +879,11 @@ class GameScene extends Phaser.Scene {
             // Enter orbital mode
             if (!this.isOrbiting) {
                 this.isOrbiting = true;
-                // Always start clockwise, will reverse on wall collision
-                this.orbitalDirection = 1;
+                // Choose direction with more clearance (longer to hit wall)
+                this.orbitalDirection = this.chooseOrbitalDirection(
+                    this.player.x, this.player.y,
+                    nearestEnemy.x, nearestEnemy.y
+                );
             }
 
             // Calculate current distance to enemy

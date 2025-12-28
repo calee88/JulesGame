@@ -937,12 +937,17 @@ class GameScene extends Phaser.Scene {
         }
 
         // Check if we should orbit or approach
-        if (nearestDistance <= GAME_CONFIG.PLAYER_ORBITAL_RANGE) {
+        // In debug map (no walls), once orbiting, stay in orbit mode permanently
+        const isDebugMap = this.mapData.walls.length === 0;
+        const shouldOrbit = nearestDistance <= GAME_CONFIG.PLAYER_ORBITAL_RANGE ||
+                           (isDebugMap && this.isOrbiting);
+
+        if (shouldOrbit) {
             // Enter orbital mode
             if (!this.isOrbiting) {
                 this.isOrbiting = true;
                 // If no walls (debug map), use fixed direction; otherwise choose based on clearance
-                if (this.mapData.walls.length === 0) {
+                if (isDebugMap) {
                     this.orbitalDirection = 1; // Fixed counterclockwise for debug
                 } else {
                     // Choose direction with more clearance (longer to hit wall)

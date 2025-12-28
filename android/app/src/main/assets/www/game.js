@@ -228,6 +228,10 @@ class GameScene extends Phaser.Scene {
         this.modeText = null;
         this.zoneAttack = null;
         this.zoneDodge = null;
+
+        // Debug visualization
+        this.debugGraphics = null;
+        this.debugDistanceText = null;
     }
 
     /**
@@ -487,6 +491,21 @@ class GameScene extends Phaser.Scene {
         })
         .setOrigin(0.5)
         .setScrollFactor(0);
+
+        // Debug visualization (only for debug map with no walls)
+        if (this.mapData.walls.length === 0) {
+            this.debugGraphics = this.add.graphics();
+            this.debugGraphics.setDepth(200);
+
+            this.debugDistanceText = this.add.text(width / 2, 100, 'Distance: --', {
+                fontSize: '24px',
+                fill: '#ffff00',
+                backgroundColor: '#000000',
+                padding: { x: 10, y: 5 }
+            })
+            .setOrigin(0.5)
+            .setScrollFactor(0);
+        }
     }
 
     setupInputZones(width, height) {
@@ -1017,6 +1036,32 @@ class GameScene extends Phaser.Scene {
                 newTangentVelX + radialVelX,
                 newTangentVelY + radialVelY
             );
+
+            // Debug visualization: draw line and show distance
+            if (this.debugGraphics && isDebugMap) {
+                this.debugGraphics.clear();
+                // Draw line from player to enemy
+                this.debugGraphics.lineStyle(2, 0x00ff00, 1);
+                this.debugGraphics.beginPath();
+                this.debugGraphics.moveTo(this.player.x, this.player.y);
+                this.debugGraphics.lineTo(nearestEnemy.x, nearestEnemy.y);
+                this.debugGraphics.strokePath();
+
+                // Draw orbital range circle around enemy
+                this.debugGraphics.lineStyle(1, 0xffff00, 0.5);
+                this.debugGraphics.strokeCircle(nearestEnemy.x, nearestEnemy.y, GAME_CONFIG.PLAYER_ORBITAL_RANGE);
+
+                // Update distance text
+                this.debugDistanceText.setText(`Distance: ${currentDistance.toFixed(1)}`);
+
+                // Log to console periodically (every 60 frames ~ 1 second)
+                if (!this.debugLogCounter) this.debugLogCounter = 0;
+                this.debugLogCounter++;
+                if (this.debugLogCounter >= 60) {
+                    console.log(`Orbital Distance: ${currentDistance.toFixed(1)} | Target: ${GAME_CONFIG.PLAYER_ORBITAL_RANGE}`);
+                    this.debugLogCounter = 0;
+                }
+            }
 
             // Clear any pathfinding data
             this.playerPath = null;

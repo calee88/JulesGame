@@ -152,6 +152,7 @@ class GameScene extends Phaser.Scene {
         this.isOrbiting = false;
         this.orbitalDirection = 1; // 1 for clockwise, -1 for counterclockwise
         this.orbitalAngle = 0;
+        this.lastWallReverseTime = 0; // Cooldown to prevent rapid direction flipping
 
         // Win Condition
         this.totalEnemies = 0;
@@ -892,14 +893,17 @@ class GameScene extends Phaser.Scene {
             }
 
             // Check if player is blocked by a wall (touching any side)
+            // Use cooldown to prevent rapid direction flipping when stuck against wall
             const touchingWall = this.player.body.blocked.up ||
                                 this.player.body.blocked.down ||
                                 this.player.body.blocked.left ||
                                 this.player.body.blocked.right;
 
-            if (touchingWall) {
+            const wallReverseCooldown = 500; // ms before allowing another direction change
+            if (touchingWall && (time - this.lastWallReverseTime > wallReverseCooldown)) {
                 // Reverse orbital direction when hitting a wall
                 this.orbitalDirection *= -1;
+                this.lastWallReverseTime = time;
             }
 
             // Update orbital angle (convert angular speed to per-frame)

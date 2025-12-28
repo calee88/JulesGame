@@ -152,7 +152,7 @@ class GameScene extends Phaser.Scene {
         this.isOrbiting = false;
         this.orbitalDirection = 1; // 1 for clockwise, -1 for counterclockwise
         this.orbitalAngle = 0;
-        this.lastWallReverseTime = 0; // Cooldown to prevent rapid direction flipping
+        this.wasOrbitalBlocked = false; // Track wall contact state for edge detection
 
         // Win Condition
         this.totalEnemies = 0;
@@ -900,25 +900,18 @@ class GameScene extends Phaser.Scene {
                                 this.player.body.touching.left ||
                                 this.player.body.touching.right;
 
-            // DEBUG: Log collision state every 500ms
-            if (!this.lastDebugTime || time - this.lastDebugTime > 500) {
-                console.log('=== ORBITAL DEBUG ===');
-                console.log('Player pos:', this.player.x.toFixed(1), this.player.y.toFixed(1));
-                console.log('Player velocity:', this.player.body.velocity.x.toFixed(1), this.player.body.velocity.y.toFixed(1));
-                console.log('touching:', JSON.stringify(this.player.body.touching));
-                console.log('blocked:', JSON.stringify(this.player.body.blocked));
-                console.log('touchingWall:', touchingWall);
-                console.log('orbitalDirection:', this.orbitalDirection);
-                this.lastDebugTime = time;
-            }
-
-            const wallReverseCooldown = 500; // ms before allowing another direction change
-            if (touchingWall && (time - this.lastWallReverseTime > wallReverseCooldown)) {
-                // Reverse orbital direction when hitting a wall
-                console.log('>>> WALL HIT! Reversing direction from', this.orbitalDirection, 'to', -this.orbitalDirection);
+            // Handle wall collision: reverse direction AND bounce orbital angle away from wall
+            // Only trigger once per wall contact (when transitioning from not-touching to touching)
+            if (touchingWall && !this.wasOrbitalBlocked) {
+                // Reverse orbital direction
                 this.orbitalDirection *= -1;
-                this.lastWallReverseTime = time;
+                // Bounce the orbital angle back significantly to escape the wall
+                // This moves the target position away from the current stuck position
+                const bounceAngle = Math.PI / 4; // 45 degrees bounce
+                this.orbitalAngle += this.orbitalDirection * bounceAngle;
+                console.log('>>> WALL HIT! Reversed to', this.orbitalDirection, ', bounced angle by', bounceAngle.toFixed(2));
             }
+            this.wasOrbitalBlocked = touchingWall;
 
             // Update orbital angle (convert angular speed to per-frame)
             const deltaSeconds = delta / 1000;

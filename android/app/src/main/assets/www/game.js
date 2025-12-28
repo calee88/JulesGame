@@ -799,8 +799,9 @@ class GameScene extends Phaser.Scene {
         }
 
         // Choose direction with more clearance
-        // Clockwise = 1, Counterclockwise = -1
-        return clockwiseClearCount > counterclockwiseClearCount ? 1 : -1;
+        // Clockwise movement = negative angular velocity (angle decreases) = -1
+        // Counterclockwise movement = positive angular velocity (angle increases) = 1
+        return clockwiseClearCount > counterclockwiseClearCount ? -1 : 1;
     }
 
     /**

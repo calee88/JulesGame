@@ -1,29 +1,7 @@
 # Development Scripts
 
-## Git Hooks Setup
+## Version Management
 
-This project uses git hooks to automate version management for cache-busting.
+Version numbers for cache-busting are automatically updated by the GitHub Actions workflow during deployment. No local setup is required.
 
-### Installation
-
-After cloning the repository, run:
-
-```bash
-./scripts/install-hooks.sh
-```
-
-### What the hooks do
-
-**pre-commit hook:**
-- Automatically updates the version number in `index.html` when `game.js` is modified
-- Uses a timestamp to ensure unique versions for proper cache-busting
-- No manual version management needed!
-
-### Manual Hook Installation
-
-If you prefer to install manually:
-
-```bash
-cp scripts/hooks/pre-commit .git/hooks/pre-commit
-chmod +x .git/hooks/pre-commit
-```
+See `.github/workflows/deploy-github-pages.yml` for the implementation.

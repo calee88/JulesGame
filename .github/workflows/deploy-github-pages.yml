@@ -7,7 +7,11 @@ on:
       - jules-pistol-game-*  # Support auto-generated branches
       - claude/**  # Support Claude branches too
     paths:
-      - 'android/app/src/main/assets/www/**'
+      - 'src/**'
+      - 'public/**'
+      - 'index.html'
+      - 'vite.config.js'
+      - 'package.json'
       - '.github/workflows/deploy-github-pages.yml'
 
   # Allow manual trigger
@@ -36,29 +40,25 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build with Vite
+        run: npm run build
+
       - name: Setup Pages
         uses: actions/configure-pages@v4
-
-      - name: Update version for cache-busting
-        run: |
-          INDEX_FILE="android/app/src/main/assets/www/index.html"
-          NEW_VERSION=$(date +%s)
-          sed -i "s/game\.js?v=[0-9]*/game.js?v=${NEW_VERSION}/" "$INDEX_FILE"
-          echo "✅ Updated game.js version to: $NEW_VERSION"
-
-      - name: Prepare files for deployment
-        run: |
-          # Copy www files to _site directory for deployment
-          mkdir -p _site
-          cp -r android/app/src/main/assets/www/* _site/
-
-          echo "✅ Files prepared for deployment:"
-          ls -la _site/
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: '_site'
+          path: './dist'
 
       - name: Deploy to GitHub Pages
         id: deployment

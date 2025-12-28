@@ -1,0 +1,13 @@
+{
+  "width": 1500,
+  "height": 1000,
+  "tileSize": 64,
+  "playerStart": {
+    "x": 400,
+    "y": 500
+  },
+  "enemies": [
+    {"x": 900, "y": 500, "patrol": [{"x": 900, "y": 500}]}
+  ],
+  "walls": []
+}

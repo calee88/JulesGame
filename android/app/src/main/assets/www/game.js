@@ -79,6 +79,10 @@ const GAME_CONFIG = {
 
     // Map
     MAP_FILE: 'map1.json',
+    AVAILABLE_MAPS: [
+        { file: 'map1.json', name: 'Level 1' },
+        { file: 'debug_map.json', name: 'Debug (1 enemy, no walls)' }
+    ],
     GRID_SIZE: 32, // Size of pathfinding grid cells
     ENEMY_AGGRO_RANGE: 400, // Distance at which enemies activate chase/dodge/shoot
     ENEMY_PATROL_SPEED: 80,
@@ -99,11 +103,65 @@ const GAME_CONFIG = {
 };
 
 // ============================================================================
+// MENU SCENE - Map Selection
+// ============================================================================
+class MenuScene extends Phaser.Scene {
+    constructor() {
+        super('menu-scene');
+    }
+
+    create() {
+        const { width, height } = this.scale;
+
+        // Title
+        this.add.text(width / 2, height * 0.2, 'Select Map', {
+            fontSize: '48px',
+            fill: '#ffffff',
+            fontFamily: 'Arial'
+        }).setOrigin(0.5);
+
+        // Create buttons for each map
+        const buttonStartY = height * 0.4;
+        const buttonSpacing = 80;
+
+        GAME_CONFIG.AVAILABLE_MAPS.forEach((mapInfo, index) => {
+            const buttonY = buttonStartY + (index * buttonSpacing);
+
+            // Button background
+            const button = this.add.rectangle(width / 2, buttonY, 400, 60, 0x4a4a6e)
+                .setInteractive({ useHandCursor: true })
+                .on('pointerover', () => button.setFillStyle(0x6a6a8e))
+                .on('pointerout', () => button.setFillStyle(0x4a4a6e))
+                .on('pointerdown', () => {
+                    this.scene.start('game-scene', { mapFile: mapInfo.file });
+                });
+
+            // Button text
+            this.add.text(width / 2, buttonY, mapInfo.name, {
+                fontSize: '24px',
+                fill: '#ffffff',
+                fontFamily: 'Arial'
+            }).setOrigin(0.5);
+        });
+    }
+}
+
+// ============================================================================
 // GAME SCENE
 // ============================================================================
 class GameScene extends Phaser.Scene {
     constructor() {
         super('game-scene');
+        this.selectedMapFile = GAME_CONFIG.MAP_FILE; // Default map
+    }
+
+    /**
+     * Init: Called when scene starts, receives data from previous scene
+     */
+    init(data) {
+        if (data && data.mapFile) {
+            this.selectedMapFile = data.mapFile;
+        }
         this.initializeState();
     }
 
@@ -184,8 +242,8 @@ class GameScene extends Phaser.Scene {
         this.generateWall();
         this.generateFloor();
 
-        // Load map data
-        this.load.json('mapData', GAME_CONFIG.MAP_FILE);
+        // Load map data (use selected map from menu)
+        this.load.json('mapData', this.selectedMapFile);
     }
 
     generateBackground() {
@@ -1690,7 +1748,7 @@ const config = {
         }
     },
     backgroundColor: '#1a1a2e',
-    scene: GameScene
+    scene: [MenuScene, GameScene]
 };
 
 const game = new Phaser.Game(config);

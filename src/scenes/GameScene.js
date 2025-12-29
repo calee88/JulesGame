@@ -5,6 +5,7 @@ import PathfindingSystem from '../systems/PathfindingSystem.js';
 import PlayerSystem from '../systems/PlayerSystem.js';
 import EnemySystem from '../systems/EnemySystem.js';
 import InputSystem from '../systems/InputSystem.js';
+import DungeonGenerator from '../systems/DungeonGenerator.js';
 
 // ============================================================================
 // GAME SCENE
@@ -88,6 +89,20 @@ export default class GameScene extends Phaser.Scene {
 
         // Load map data
         this.mapData = this.cache.json.get('mapData');
+
+        // Generate dungeon if seed is present
+        if (this.mapData.seed !== undefined) {
+            const dungeon = DungeonGenerator.generate(
+                this.mapData.seed,
+                this.mapData.width,
+                this.mapData.height
+            );
+
+            // Merge generated dungeon data into mapData
+            this.mapData.walls = dungeon.walls;
+            this.mapData.enemies = dungeon.enemies;
+            this.mapData.playerStart = dungeon.playerStart;
+        }
 
         // Set world bounds to map size
         this.physics.world.setBounds(0, 0, this.mapData.width, this.mapData.height);

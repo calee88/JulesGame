@@ -81,13 +81,13 @@ export const GAME_CONFIG = {
         { file: 'map1.json', name: 'Level 1' },
         { file: 'debug_map.json', name: 'Debug (1 enemy, no walls)' }
     ],
-    GRID_SIZE: 16, // Size of pathfinding grid cells (reduced for finer collision detection)
+    GRID_SIZE: 32, // Size of pathfinding grid cells
     ENEMY_AGGRO_RANGE: 400, // Distance at which enemies activate chase/dodge/shoot
     ENEMY_PATROL_SPEED: 80,
 
     // Auto-walk
     PLAYER_AUTO_WALK_SPEED: 180,
-    PLAYER_ARRIVAL_THRESHOLD: 8, // Distance to consider "arrived" - must be smaller than GRID_SIZE
+    PLAYER_ARRIVAL_THRESHOLD: 16, // Distance to consider "arrived" - must be smaller than GRID_SIZE
 
     // Zone Flash
     ZONE_FLASH_DURATION: 200,

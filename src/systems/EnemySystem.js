@@ -6,12 +6,13 @@ import { GAME_CONFIG } from '../config/gameConfig.js';
  * Handles enemy AI, movement, dodging, and shooting
  */
 export default class EnemySystem {
-    constructor(scene, enemies, player, bullets, enemyBullets) {
+    constructor(scene, enemies, player, bullets, enemyBullets, pathfinding) {
         this.scene = scene;
         this.enemies = enemies;
         this.player = player;
         this.bullets = bullets;
         this.enemyBullets = enemyBullets;
+        this.pathfinding = pathfinding;
     }
 
     /**
@@ -36,7 +37,7 @@ export default class EnemySystem {
      */
     updateDodging(time) {
         this.enemies.children.each(enemy => {
-            if (enemy.active && this.player.active && enemy.isAggro) {
+            if (enemy.active && this.player.active) {
                 // Check if dodge duration is over
                 if (enemy.isDodging) {
                     if (time - enemy.dodgeStartTime >= GAME_CONFIG.ENEMY_DODGE_DURATION) {
@@ -79,8 +80,9 @@ export default class EnemySystem {
                             enemy.isDodging = true;
                             enemy.dodgeStartTime = time;
 
-                            // Dodge perpendicular to bullet direction
-                            const dodgeAngle = bulletAngle + (Math.random() < 0.5 ? Math.PI / 2 : -Math.PI / 2);
+                            // Choose best dodge direction based on wall clearance and player position
+                            const dodgeOffset = this.chooseDodgeDirection(enemy.x, enemy.y, bulletAngle);
+                            const dodgeAngle = bulletAngle + dodgeOffset;
                             enemy.dodgeTargetX = enemy.x + Math.cos(dodgeAngle) * GAME_CONFIG.ENEMY_DODGE_DISTANCE;
                             enemy.dodgeTargetY = enemy.y + Math.sin(dodgeAngle) * GAME_CONFIG.ENEMY_DODGE_DISTANCE;
                         }
@@ -253,5 +255,83 @@ export default class EnemySystem {
                 }
             }
         });
+    }
+
+    /**
+     * Choose dodge direction based on wall clearance and bullet avoidance
+     * Returns angle offset: Math.PI/2 (left) or -Math.PI/2 (right) relative to bullet direction
+     * Picks the direction with more clearance and better bullet avoidance
+     */
+    chooseDodgeDirection(enemyX, enemyY, bulletAngle) {
+        // The two perpendicular directions relative to bullet
+        const leftDodgeAngle = bulletAngle + Math.PI / 2;
+        const rightDodgeAngle = bulletAngle - Math.PI / 2;
+
+        // Sample points along each dodge direction to check clearance
+        const sampleCount = 8; // Check 8 points in each direction
+        const sampleDistance = GAME_CONFIG.ENEMY_DODGE_DISTANCE / sampleCount;
+
+        let leftClearCount = 0;
+        let rightClearCount = 0;
+
+        // Check left dodge direction
+        for (let i = 1; i <= sampleCount; i++) {
+            const x = enemyX + Math.cos(leftDodgeAngle) * (sampleDistance * i);
+            const y = enemyY + Math.sin(leftDodgeAngle) * (sampleDistance * i);
+
+            if (this.pathfinding.isPointBlocked(x, y)) {
+                break; // Stop counting when we hit a wall
+            }
+            leftClearCount++;
+        }
+
+        // Check right dodge direction
+        for (let i = 1; i <= sampleCount; i++) {
+            const x = enemyX + Math.cos(rightDodgeAngle) * (sampleDistance * i);
+            const y = enemyY + Math.sin(rightDodgeAngle) * (sampleDistance * i);
+
+            if (this.pathfinding.isPointBlocked(x, y)) {
+                break; // Stop counting when we hit a wall
+            }
+            rightClearCount++;
+        }
+
+        // If both directions are blocked, try to dodge backwards (opposite of bullet)
+        if (leftClearCount === 0 && rightClearCount === 0) {
+            const backwardAngle = bulletAngle + Math.PI; // 180 degrees from bullet
+            const backwardX = enemyX + Math.cos(backwardAngle) * GAME_CONFIG.ENEMY_DODGE_DISTANCE;
+            const backwardY = enemyY + Math.sin(backwardAngle) * GAME_CONFIG.ENEMY_DODGE_DISTANCE;
+
+            // If backward is clear, use it (return as left offset for implementation simplicity)
+            if (!this.pathfinding.isPointBlocked(backwardX, backwardY)) {
+                return Math.PI; // Dodge backward
+            }
+
+            // Last resort: stay put (dodge in place with minimal movement)
+            return 0;
+        }
+
+        // If both directions are equally clear, prefer the one that moves away from player
+        // (to create more distance and dodging space)
+        if (leftClearCount === rightClearCount && this.player.active) {
+            const angleToPlayer = Phaser.Math.Angle.Between(
+                enemyX, enemyY,
+                this.player.x, this.player.y
+            );
+
+            const leftTargetX = enemyX + Math.cos(leftDodgeAngle) * GAME_CONFIG.ENEMY_DODGE_DISTANCE;
+            const leftTargetY = enemyY + Math.sin(leftDodgeAngle) * GAME_CONFIG.ENEMY_DODGE_DISTANCE;
+            const rightTargetX = enemyX + Math.cos(rightDodgeAngle) * GAME_CONFIG.ENEMY_DODGE_DISTANCE;
+            const rightTargetY = enemyY + Math.sin(rightDodgeAngle) * GAME_CONFIG.ENEMY_DODGE_DISTANCE;
+
+            const leftDistToPlayer = Phaser.Math.Distance.Between(leftTargetX, leftTargetY, this.player.x, this.player.y);
+            const rightDistToPlayer = Phaser.Math.Distance.Between(rightTargetX, rightTargetY, this.player.x, this.player.y);
+
+            // Choose direction that increases distance from player
+            return leftDistToPlayer > rightDistToPlayer ? Math.PI / 2 : -Math.PI / 2;
+        }
+
+        // Choose direction with more clearance
+        return leftClearCount > rightClearCount ? Math.PI / 2 : -Math.PI / 2;
     }
 }

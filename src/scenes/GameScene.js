@@ -117,7 +117,7 @@ export default class GameScene extends Phaser.Scene {
         // Initialize systems
         this.pathfinding = new PathfindingSystem(this, this.mapData);
         this.playerSystem = new PlayerSystem(this, this.player, this.pathfinding);
-        this.enemySystem = new EnemySystem(this, this.enemies, this.player, this.bullets, this.enemyBullets);
+        this.enemySystem = new EnemySystem(this, this.enemies, this.player, this.bullets, this.enemyBullets, this.pathfinding);
         this.inputSystem = new InputSystem(this);
 
         this.drawPathfindingGrid();

@@ -54,12 +54,44 @@ export default class PathfindingSystem {
             }
         });
 
+        // Add buffer zone around walls for player collision radius
+        // Player has 32px size (16px radius), so expand walls by 1 grid cell in pathfinding
+        // This creates a "configuration space" that accounts for player size
+        this.expandWallsForPlayerSize(gridWidth, gridHeight);
+
         // Initialize EasyStar pathfinder
         this.easystar = new EasyStar.js();
         this.easystar.setGrid(this.grid);
         this.easystar.setAcceptableTiles([0]); // 0 is walkable
         this.easystar.enableDiagonals();
         this.easystar.disableCornerCutting(); // Prevent paths from cutting through wall corners
+    }
+
+    /**
+     * Expand walls by one grid cell to account for player collision size
+     * This prevents paths from getting too close to walls where the player would collide
+     */
+    expandWallsForPlayerSize(gridWidth, gridHeight) {
+        // Create a copy of the current grid to avoid modifying while iterating
+        const originalGrid = this.grid.map(row => [...row]);
+
+        // For each blocked cell, mark adjacent cells as blocked too
+        for (let y = 0; y < gridHeight; y++) {
+            for (let x = 0; x < gridWidth; x++) {
+                if (originalGrid[y][x] === 1) {
+                    // Mark 8 adjacent cells (including diagonals) as blocked
+                    for (let dy = -1; dy <= 1; dy++) {
+                        for (let dx = -1; dx <= 1; dx++) {
+                            const nx = x + dx;
+                            const ny = y + dy;
+                            if (nx >= 0 && nx < gridWidth && ny >= 0 && ny < gridHeight) {
+                                this.grid[ny][nx] = 1;
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /**

@@ -36,7 +36,7 @@ export default class EnemySystem {
      */
     updateDodging(time) {
         this.enemies.children.each(enemy => {
-            if (enemy.active && this.player.active && enemy.isAggro) {
+            if (enemy.active && this.player.active) {
                 // Check if dodge duration is over
                 if (enemy.isDodging) {
                     if (time - enemy.dodgeStartTime >= GAME_CONFIG.ENEMY_DODGE_DURATION) {

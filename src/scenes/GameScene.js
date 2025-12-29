@@ -238,6 +238,9 @@ export default class GameScene extends Phaser.Scene {
             enemy.patrolPoints = enemyData.patrol || [{ x: enemyData.x, y: enemyData.y }];
             enemy.currentPatrolIndex = 0;
 
+            // Test mode (enemy doesn't aggro or shoot, only dodges)
+            enemy.testMode = enemyData.testMode || false;
+
             // Shooting range state (for hysteresis)
             enemy.isInShootingRange = false;
 

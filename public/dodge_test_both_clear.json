@@ -3,11 +3,11 @@
   "height": 800,
   "tileSize": 64,
   "playerStart": {
-    "x": 300,
+    "x": 400,
     "y": 600
   },
   "enemies": [
-    {"x": 700, "y": 400, "patrol": [{"x": 700, "y": 400}]}
+    {"x": 700, "y": 300, "patrol": [{"x": 700, "y": 300}], "testMode": true}
   ],
   "walls": []
 }

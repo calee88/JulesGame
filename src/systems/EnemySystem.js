@@ -21,6 +21,12 @@ export default class EnemySystem {
     updateAggro() {
         this.enemies.children.each(enemy => {
             if (enemy.active && this.player.active) {
+                // Test mode enemies never aggro
+                if (enemy.testMode) {
+                    enemy.isAggro = false;
+                    return;
+                }
+
                 const distance = Phaser.Math.Distance.Between(
                     enemy.x, enemy.y,
                     this.player.x, this.player.y
@@ -169,6 +175,9 @@ export default class EnemySystem {
                             enemy.setVelocity(0, 0);
                         }
                     }
+                } else if (enemy.testMode) {
+                    // Test mode: stay stationary (don't patrol)
+                    enemy.setVelocity(0, 0);
                 } else {
                     // Patrol behavior
                     const patrolTarget = enemy.patrolPoints[enemy.currentPatrolIndex];

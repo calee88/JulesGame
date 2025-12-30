@@ -78,7 +78,9 @@ export default class GameScene extends Phaser.Scene {
         AssetGenerator.generateAssets(this);
 
         // Load map data (use selected map from menu)
-        this.load.json('mapData', this.selectedMapFile);
+        // Add timestamp to prevent caching issues
+        const cacheBuster = `?v=${Date.now()}`;
+        this.load.json('mapData', this.selectedMapFile + cacheBuster);
     }
 
     /**
@@ -237,6 +239,9 @@ export default class GameScene extends Phaser.Scene {
             enemy.isAggro = false;
             enemy.patrolPoints = enemyData.patrol || [{ x: enemyData.x, y: enemyData.y }];
             enemy.currentPatrolIndex = 0;
+
+            // Test mode (enemy doesn't aggro or shoot, only dodges)
+            enemy.testMode = enemyData.testMode || false;
 
             // Shooting range state (for hysteresis)
             enemy.isInShootingRange = false;

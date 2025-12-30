@@ -21,6 +21,12 @@ export default class EnemySystem {
     updateAggro() {
         this.enemies.children.each(enemy => {
             if (enemy.active && this.player.active) {
+                // Test mode enemies never aggro
+                if (enemy.testMode) {
+                    enemy.isAggro = false;
+                    return;
+                }
+
                 const distance = Phaser.Math.Distance.Between(
                     enemy.x, enemy.y,
                     this.player.x, this.player.y
@@ -169,6 +175,9 @@ export default class EnemySystem {
                             enemy.setVelocity(0, 0);
                         }
                     }
+                } else if (enemy.testMode) {
+                    // Test mode: stay stationary (don't patrol)
+                    enemy.setVelocity(0, 0);
                 } else {
                     // Patrol behavior
                     const patrolTarget = enemy.patrolPoints[enemy.currentPatrolIndex];
@@ -294,21 +303,6 @@ export default class EnemySystem {
                 break; // Stop counting when we hit a wall
             }
             rightClearCount++;
-        }
-
-        // If both directions are blocked, try to dodge backwards (opposite of bullet)
-        if (leftClearCount === 0 && rightClearCount === 0) {
-            const backwardAngle = bulletAngle + Math.PI; // 180 degrees from bullet
-            const backwardX = enemyX + Math.cos(backwardAngle) * GAME_CONFIG.ENEMY_DODGE_DISTANCE;
-            const backwardY = enemyY + Math.sin(backwardAngle) * GAME_CONFIG.ENEMY_DODGE_DISTANCE;
-
-            // If backward is clear, use it (return as left offset for implementation simplicity)
-            if (!this.pathfinding.isPointBlocked(backwardX, backwardY)) {
-                return Math.PI; // Dodge backward
-            }
-
-            // Last resort: stay put (dodge in place with minimal movement)
-            return 0;
         }
 
         // If both directions are equally clear, prefer the one that moves away from player

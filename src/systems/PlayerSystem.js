@@ -71,6 +71,13 @@ export default class PlayerSystem {
             return;
         }
 
+        // If enemy is in test mode, keep player stationary
+        if (nearestEnemy.testMode) {
+            this.player.setVelocity(0, 0);
+            this.isOrbiting = false;
+            return;
+        }
+
         // Check if we should orbit or approach
         // Use hysteresis to prevent oscillation at orbital boundary
         const isDebugMap = this.scene.mapData.walls.length === 0;

@@ -1,0 +1,26 @@
+{
+  "width": 1200,
+  "height": 800,
+  "tileSize": 64,
+  "playerStart": {
+    "x": 400,
+    "y": 304
+  },
+  "enemies": [
+    {"x": 700, "y": 304, "patrol": [{"x": 700, "y": 304}], "testMode": true}
+  ],
+  "walls": [
+    {
+      "x": 600,
+      "y": 0,
+      "width": 300,
+      "height": 256
+    },
+    {
+      "x": 600,
+      "y": 352,
+      "width": 300,
+      "height": 256
+    }
+  ]
+}

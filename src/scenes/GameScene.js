@@ -78,7 +78,9 @@ export default class GameScene extends Phaser.Scene {
         AssetGenerator.generateAssets(this);
 
         // Load map data (use selected map from menu)
-        this.load.json('mapData', this.selectedMapFile);
+        // Add timestamp to prevent caching issues
+        const cacheBuster = `?v=${Date.now()}`;
+        this.load.json('mapData', this.selectedMapFile + cacheBuster);
     }
 
     /**

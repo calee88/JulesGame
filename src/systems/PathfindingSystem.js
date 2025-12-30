@@ -298,6 +298,16 @@ export default class PathfindingSystem {
                 graphics.lineStyle(1, 0xffffff, 0.1);
                 graphics.strokeRect(worldX, worldY, GAME_CONFIG.GRID_SIZE, GAME_CONFIG.GRID_SIZE);
             }
+
+            // Add Y-coordinate label on the left side of each row
+            const worldY = y * GAME_CONFIG.GRID_SIZE;
+            const label = this.scene.add.text(5, worldY + 8, `y=${worldY}`, {
+                fontSize: '12px',
+                fill: '#ffff00',
+                backgroundColor: '#000000'
+            });
+            label.setScrollFactor(1); // Move with camera
+            label.setDepth(depth + 1); // Above grid
         }
     }
 }

@@ -305,21 +305,6 @@ export default class EnemySystem {
             rightClearCount++;
         }
 
-        // If both directions are blocked, try to dodge backwards (opposite of bullet)
-        if (leftClearCount === 0 && rightClearCount === 0) {
-            const backwardAngle = bulletAngle + Math.PI; // 180 degrees from bullet
-            const backwardX = enemyX + Math.cos(backwardAngle) * GAME_CONFIG.ENEMY_DODGE_DISTANCE;
-            const backwardY = enemyY + Math.sin(backwardAngle) * GAME_CONFIG.ENEMY_DODGE_DISTANCE;
-
-            // If backward is clear, use it (return as left offset for implementation simplicity)
-            if (!this.pathfinding.isPointBlocked(backwardX, backwardY)) {
-                return Math.PI; // Dodge backward
-            }
-
-            // Last resort: stay put (dodge in place with minimal movement)
-            return 0;
-        }
-
         // If both directions are equally clear, prefer the one that moves away from player
         // (to create more distance and dodging space)
         if (leftClearCount === rightClearCount && this.player.active) {

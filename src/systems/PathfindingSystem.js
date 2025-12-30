@@ -301,18 +301,18 @@ export default class PathfindingSystem {
 
         }
 
-        // Add Y-coordinate labels at their actual world positions
-        // Position on the right side of the map, aligned with grid lines
+        // Add Y-coordinate labels aligned with their world Y-coordinates
+        // Labels stay at fixed screen position (left edge) but align vertically with grid
         // Show every 64px (2 grid cells) for readability
         for (let y = 0; y <= gridHeight; y += 2) {
             const worldY = y * GAME_CONFIG.GRID_SIZE;
-            const label = this.scene.add.text(1100, worldY, `y=${worldY}`, {
+            const label = this.scene.add.text(10, worldY, `y=${worldY}`, {
                 fontSize: '14px',
                 fill: '#ffff00',
                 backgroundColor: '#000000',
                 padding: { x: 4, y: 2 }
             });
-            label.setScrollFactor(1, 1); // Move with world
+            label.setScrollFactor(0, 1); // Fixed X (screen), follows world Y
             label.setDepth(1000); // Above everything
         }
     }

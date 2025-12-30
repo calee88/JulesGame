@@ -315,21 +315,21 @@ export default class PathfindingSystem {
 
         legendY += 20;
 
-        // Show every 64px (2 grid cells) for readability
-        for (let y = 0; y <= gridHeight; y += 2) {
+        // Show every 128px (4 grid cells) for better readability
+        for (let y = 0; y <= gridHeight; y += 4) {
             const worldY = y * GAME_CONFIG.GRID_SIZE;
             const label = this.scene.add.text(legendX, legendY, `y=${worldY}`, {
-                fontSize: '11px',
+                fontSize: '13px',
                 fill: '#ffff00',
                 backgroundColor: '#000000',
-                padding: { x: 3, y: 1 }
+                padding: { x: 4, y: 2 }
             });
             label.setScrollFactor(0); // Fixed to camera
             label.setDepth(1000);
-            legendY += 15;
+            legendY += 25;
 
             // Stop after showing enough to be useful
-            if (legendY > 400) break;
+            if (legendY > 500) break;
         }
     }
 }

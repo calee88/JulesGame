@@ -301,35 +301,18 @@ export default class PathfindingSystem {
 
         }
 
-        // Add Y-coordinate labels in a fixed legend (camera-relative)
-        // Create a legend showing grid Y-coordinates
-        const legendX = 10;
-        let legendY = 10;
-
-        this.scene.add.text(legendX, legendY, 'Grid Y-coordinates:', {
-            fontSize: '14px',
-            fill: '#ffffff',
-            backgroundColor: '#000000',
-            padding: { x: 4, y: 2 }
-        }).setScrollFactor(0).setDepth(1000);
-
-        legendY += 20;
-
-        // Show every 128px (4 grid cells) for better readability
+        // Add Y-coordinate labels at their actual world positions
+        // Show every 128px (4 grid cells) for readability
         for (let y = 0; y <= gridHeight; y += 4) {
             const worldY = y * GAME_CONFIG.GRID_SIZE;
-            const label = this.scene.add.text(legendX, legendY, `y=${worldY}`, {
-                fontSize: '13px',
+            const label = this.scene.add.text(5, worldY + 10, `y=${worldY}`, {
+                fontSize: '14px',
                 fill: '#ffff00',
                 backgroundColor: '#000000',
                 padding: { x: 4, y: 2 }
             });
-            label.setScrollFactor(0); // Fixed to camera
-            label.setDepth(1000);
-            legendY += 25;
-
-            // Stop after showing enough to be useful
-            if (legendY > 500) break;
+            label.setScrollFactor(1, 1); // Move with world
+            label.setDepth(1000); // Above everything
         }
     }
 }

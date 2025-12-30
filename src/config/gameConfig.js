@@ -80,6 +80,7 @@ export const GAME_CONFIG = {
     AVAILABLE_MAPS: [
         { file: 'map1.json', name: 'Level 1' },
         { file: 'debug_map.json', name: 'Debug (1 enemy, no walls)' },
+        { file: 'debug_walls.json', name: 'Debug: Wall Heights' },
         { file: 'dodge_test_wall_right.json', name: 'Dodge Test: Wall Above' },
         { file: 'dodge_test_wall_left.json', name: 'Dodge Test: Wall Below' },
         { file: 'dodge_test_both_clear.json', name: 'Dodge Test: Both Clear' },

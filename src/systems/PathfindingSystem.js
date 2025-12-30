@@ -299,15 +299,37 @@ export default class PathfindingSystem {
                 graphics.strokeRect(worldX, worldY, GAME_CONFIG.GRID_SIZE, GAME_CONFIG.GRID_SIZE);
             }
 
-            // Add Y-coordinate label on the left side of each row
+        }
+
+        // Add Y-coordinate labels in a fixed legend (camera-relative)
+        // Create a legend showing grid Y-coordinates
+        const legendX = 10;
+        let legendY = 10;
+
+        this.scene.add.text(legendX, legendY, 'Grid Y-coordinates:', {
+            fontSize: '14px',
+            fill: '#ffffff',
+            backgroundColor: '#000000',
+            padding: { x: 4, y: 2 }
+        }).setScrollFactor(0).setDepth(1000);
+
+        legendY += 20;
+
+        // Show every 64px (2 grid cells) for readability
+        for (let y = 0; y <= gridHeight; y += 2) {
             const worldY = y * GAME_CONFIG.GRID_SIZE;
-            const label = this.scene.add.text(5, worldY + 8, `y=${worldY}`, {
-                fontSize: '12px',
+            const label = this.scene.add.text(legendX, legendY, `y=${worldY}`, {
+                fontSize: '11px',
                 fill: '#ffff00',
-                backgroundColor: '#000000'
+                backgroundColor: '#000000',
+                padding: { x: 3, y: 1 }
             });
-            label.setScrollFactor(1); // Move with camera
-            label.setDepth(depth + 1); // Above grid
+            label.setScrollFactor(0); // Fixed to camera
+            label.setDepth(1000);
+            legendY += 15;
+
+            // Stop after showing enough to be useful
+            if (legendY > 400) break;
         }
     }
 }

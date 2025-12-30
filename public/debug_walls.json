@@ -12,55 +12,55 @@
       "x": 200,
       "y": 0,
       "width": 64,
-      "height": 350
+      "height": 50
     },
     {
       "x": 300,
       "y": 0,
       "width": 64,
-      "height": 64
+      "height": 100
     },
     {
       "x": 400,
       "y": 0,
       "width": 64,
-      "height": 128
+      "height": 150
     },
     {
       "x": 500,
       "y": 0,
       "width": 64,
-      "height": 192
+      "height": 200
     },
     {
       "x": 600,
       "y": 0,
       "width": 64,
-      "height": 256
+      "height": 250
     },
     {
       "x": 700,
       "y": 0,
       "width": 64,
-      "height": 320
+      "height": 300
     },
     {
       "x": 800,
       "y": 0,
       "width": 64,
-      "height": 384
+      "height": 350
     },
     {
       "x": 900,
       "y": 0,
       "width": 64,
-      "height": 448
+      "height": 400
     },
     {
       "x": 1000,
       "y": 0,
       "width": 64,
-      "height": 512
+      "height": 450
     }
   ]
 }

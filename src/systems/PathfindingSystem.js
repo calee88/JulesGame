@@ -302,10 +302,11 @@ export default class PathfindingSystem {
         }
 
         // Add Y-coordinate labels at their actual world positions
-        // Show every 128px (4 grid cells) for readability
-        for (let y = 0; y <= gridHeight; y += 4) {
+        // Position on the right side of the map, aligned with grid lines
+        // Show every 64px (2 grid cells) for readability
+        for (let y = 0; y <= gridHeight; y += 2) {
             const worldY = y * GAME_CONFIG.GRID_SIZE;
-            const label = this.scene.add.text(5, worldY + 10, `y=${worldY}`, {
+            const label = this.scene.add.text(1100, worldY, `y=${worldY}`, {
                 fontSize: '14px',
                 fill: '#ffff00',
                 backgroundColor: '#000000',

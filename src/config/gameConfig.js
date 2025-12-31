@@ -23,7 +23,7 @@ export const GAME_CONFIG = {
     ENEMY_RESUME_BUFFER: 50,              // Extra distance needed to resume chasing after stopping
     ENEMY_FIRE_RATE: 1000,
     ENEMY_CAST_TIME: 500,
-    ENEMY_BULLET_SPEED: 400,
+    ENEMY_BULLET_SPEED: 200,
     ENEMY_BULLET_COLOR: 0xff6600,
     ENEMY_DODGE_COOLDOWN: 3000,
     ENEMY_DODGE_DURATION: 300,
@@ -32,7 +32,7 @@ export const GAME_CONFIG = {
     ENEMY_BULLET_DETECTION_RANGE: 200,
 
     // Bullet
-    BULLET_SPEED: 600,
+    BULLET_SPEED: 1200,
     BULLET_FIRE_RATE: 300,
     BULLET_OFFSET_X: 20,
     BULLET_COLOR: 0xffff00,

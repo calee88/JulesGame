@@ -400,7 +400,7 @@ export default class GameScene extends Phaser.Scene {
             'bullet'
         );
 
-        // Aim at the targeted enemy, or shoot right if no target
+        // Aim at the targeted enemy, or shoot in player's movement direction if no target
         if (this.targetedEnemy && this.targetedEnemy.active) {
             const angle = Phaser.Math.Angle.Between(
                 bullet.x, bullet.y,
@@ -412,8 +412,22 @@ export default class GameScene extends Phaser.Scene {
                 Math.sin(angle) * GAME_CONFIG.BULLET_SPEED
             );
         } else {
-            // No target, shoot straight right
-            bullet.setVelocityX(GAME_CONFIG.BULLET_SPEED);
+            // No target, shoot in the direction the player is moving
+            const playerVelX = this.player.body.velocity.x;
+            const playerVelY = this.player.body.velocity.y;
+            const speed = Math.sqrt(playerVelX * playerVelX + playerVelY * playerVelY);
+
+            if (speed > 10) {
+                // Player is moving, shoot in movement direction
+                const angle = Math.atan2(playerVelY, playerVelX);
+                bullet.setVelocity(
+                    Math.cos(angle) * GAME_CONFIG.BULLET_SPEED,
+                    Math.sin(angle) * GAME_CONFIG.BULLET_SPEED
+                );
+            } else {
+                // Player is stationary, shoot straight right
+                bullet.setVelocityX(GAME_CONFIG.BULLET_SPEED);
+            }
         }
     }
 

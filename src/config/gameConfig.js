@@ -40,7 +40,7 @@ export const GAME_CONFIG = {
     BULLET_HEIGHT: 8,
 
     // Targeting
-    MAX_TARGET_RANGE: 500, // Maximum distance at which enemies can be targeted
+    MAX_TARGET_RANGE: 400, // Maximum distance at which enemies can be targeted
 
     // Dodge
     DODGE_DURATION: 500,

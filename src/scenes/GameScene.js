@@ -354,7 +354,7 @@ export default class GameScene extends Phaser.Scene {
             return;
         }
 
-        // Find the closest enemy
+        // Find the closest enemy within range
         let closestEnemy = null;
         let closestDistance = Infinity;
 
@@ -365,7 +365,8 @@ export default class GameScene extends Phaser.Scene {
                     enemy.x, enemy.y
                 );
 
-                if (distance < closestDistance) {
+                // Only target enemies within MAX_TARGET_RANGE
+                if (distance < closestDistance && distance <= GAME_CONFIG.MAX_TARGET_RANGE) {
                     closestDistance = distance;
                     closestEnemy = enemy;
                 }

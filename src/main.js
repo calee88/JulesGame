@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import MenuScene from './scenes/MenuScene.js';
 import GameScene from './scenes/GameScene.js';
+import SurvivalGameScene from './scenes/SurvivalGameScene.js';
 
 // ============================================================================
 // GAME CONFIGURATION
@@ -54,7 +55,7 @@ const config = {
         }
     },
     backgroundColor: '#1a1a2e',
-    scene: [MenuScene, GameScene]
+    scene: [MenuScene, GameScene, SurvivalGameScene]
 };
 
 const game = new Phaser.Game(config);

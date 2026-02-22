@@ -4,7 +4,7 @@
 export const SURVIVAL_CONFIG = {
     // Arena geometry
     ARENA_RADIUS: 280,
-    BASE_RADIUS: 55,
+    BASE_RADIUS: 35,
 
     // Player marble defaults
     PLAYER_MARBLE_RADIUS: 16,

@@ -54,6 +54,18 @@ export default class SurvivalGameScene extends Phaser.Scene {
         this.canFire  = true;
         this.isAiming = false;
 
+        // ---- Arena bounds (clamped so it never bleeds off-screen) ----
+        const arenaW = Math.min(CFG.ARENA_W, W - 20);
+        const arenaH = Math.min(CFG.ARENA_H, H - 120);
+        this.arenaBounds = {
+            left:   this.cx - arenaW / 2,
+            right:  this.cx + arenaW / 2,
+            top:    this.cy - arenaH / 2,
+            bottom: this.cy + arenaH / 2,
+            w: arenaW,
+            h: arenaH,
+        };
+
         // ---- Build scene ----
         this._createBackground();
         this._createArena();
@@ -97,29 +109,42 @@ export default class SurvivalGameScene extends Phaser.Scene {
 
     _createArena() {
         const g = this.add.graphics().setDepth(1);
+        const { left, right, top, bottom, w, h } = this.arenaBounds;
         const { cx, cy } = this;
-        const r = CFG.ARENA_RADIUS;
 
         // Arena floor
         g.fillStyle(0x1a1a36, 1);
-        g.fillCircle(cx, cy, r);
+        g.fillRect(left, top, w, h);
 
-        // Spoke lines
-        g.lineStyle(1, 0x282860, 0.45);
-        for (let a = 0; a < Math.PI * 2; a += Math.PI / 8) {
-            g.lineBetween(cx, cy, cx + Math.cos(a) * r, cy + Math.sin(a) * r);
-        }
-
-        // Concentric rings
+        // Grid lines
         g.lineStyle(1, 0x282860, 0.35);
-        for (let ring = 80; ring < r; ring += 80) {
-            g.strokeCircle(cx, cy, ring);
+        for (let x = left + 80; x < right; x += 80) {
+            g.lineBetween(x, top, x, bottom);
         }
+        for (let y = top + 80; y < bottom; y += 80) {
+            g.lineBetween(left, y, right, y);
+        }
+
+        // Diagonal cross from center to corners (subtle)
+        g.lineStyle(1, 0x282860, 0.20);
+        g.lineBetween(cx, cy, left,  top);
+        g.lineBetween(cx, cy, right, top);
+        g.lineBetween(cx, cy, left,  bottom);
+        g.lineBetween(cx, cy, right, bottom);
 
         // Arena border — layered glow
-        g.lineStyle(10, 0x1a3380, 0.25); g.strokeCircle(cx, cy, r);
-        g.lineStyle(5,  0x3355cc, 0.70); g.strokeCircle(cx, cy, r);
-        g.lineStyle(2,  0x88aaff, 1.00); g.strokeCircle(cx, cy, r);
+        g.lineStyle(10, 0x1a3380, 0.22); g.strokeRect(left, top, w, h);
+        g.lineStyle(5,  0x3355cc, 0.70); g.strokeRect(left, top, w, h);
+        g.lineStyle(2,  0x88aaff, 1.00); g.strokeRect(left, top, w, h);
+
+        // Corner accents
+        const ca = 20;
+        g.lineStyle(3, 0xaaccff, 0.9);
+        [[left, top, 1, 1], [right, top, -1, 1], [left, bottom, 1, -1], [right, bottom, -1, -1]]
+            .forEach(([x, y, sx, sy]) => {
+                g.lineBetween(x, y, x + sx * ca, y);
+                g.lineBetween(x, y, x, y + sy * ca);
+            });
 
         // --- Base (defended structure) ---
         this.baseGfx = this.add.graphics().setDepth(2);
@@ -257,14 +282,21 @@ export default class SurvivalGameScene extends Phaser.Scene {
         const nx = dx / dist;
         const ny = dy / dist;
 
-        const r    = this.playerUpgrades.marbleRadius;
-        const sD   = CFG.BASE_RADIUS + r + 4;   // spawn distance from center
-        const eD   = CFG.ARENA_RADIUS - r - 4;  // end at arena wall
+        const r  = this.playerUpgrades.marbleRadius;
+        const sD = CFG.BASE_RADIUS + r + 4;
 
         const sx = this.cx + nx * sD;
         const sy = this.cy + ny * sD;
-        const ex = this.cx + nx * eD;
-        const ey = this.cy + ny * eD;
+
+        // Ray-rectangle intersection: find t where ray hits arena wall
+        const { left, right, top, bottom } = this.arenaBounds;
+        let tMin = Infinity;
+        if (nx > 0)  tMin = Math.min(tMin, (right  - r - this.cx) / nx);
+        if (nx < 0)  tMin = Math.min(tMin, (left   + r - this.cx) / nx);
+        if (ny > 0)  tMin = Math.min(tMin, (bottom - r - this.cy) / ny);
+        if (ny < 0)  tMin = Math.min(tMin, (top    + r - this.cy) / ny);
+        const ex = this.cx + nx * tMin;
+        const ey = this.cy + ny * tMin;
 
         // Dashed trajectory line
         const totalLen = Math.sqrt((ex - sx) ** 2 + (ey - sy) ** 2);
@@ -297,13 +329,18 @@ export default class SurvivalGameScene extends Phaser.Scene {
         const sides  = Math.floor(multi / 2);
         for (let s = 1; s <= sides; s++) {
             for (const sign of [-1, 1]) {
-                const ang = Math.atan2(ny, nx) + sign * spread * s;
-                const snx = Math.cos(ang);
-                const sny = Math.sin(ang);
+                const ang  = Math.atan2(ny, nx) + sign * spread * s;
+                const snx  = Math.cos(ang);
+                const sny  = Math.sin(ang);
+                let st = Infinity;
+                if (snx > 0) st = Math.min(st, (right  - r - this.cx) / snx);
+                if (snx < 0) st = Math.min(st, (left   + r - this.cx) / snx);
+                if (sny > 0) st = Math.min(st, (bottom - r - this.cy) / sny);
+                if (sny < 0) st = Math.min(st, (top    + r - this.cy) / sny);
                 g.lineStyle(1, 0xffff66, 0.35);
                 g.lineBetween(
                     this.cx + snx * sD, this.cy + sny * sD,
-                    this.cx + snx * eD, this.cy + sny * eD
+                    this.cx + snx * st, this.cy + sny * st
                 );
             }
         }

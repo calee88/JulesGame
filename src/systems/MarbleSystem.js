@@ -8,6 +8,7 @@ export class MarbleSystem {
         this.scene = scene;
         this.cx = scene.cx;
         this.cy = scene.cy;
+        this.arenaBounds = scene.arenaBounds;
 
         // References to scene's shared marble arrays
         this.playerMarbles = scene.playerMarbles;
@@ -94,19 +95,25 @@ export class MarbleSystem {
         const props = CFG.MARBLE_TYPES[type];
         if (!props) return null;
 
-        // Spawn on arena edge at a random angle
-        const angle = Math.random() * Math.PI * 2;
-        const spawnDist = CFG.ARENA_RADIUS - props.radius - 2;
-        const x = this.cx + Math.cos(angle) * spawnDist;
-        const y = this.cy + Math.sin(angle) * spawnDist;
+        // Spawn from a random point on one of the four arena walls
+        const { left, right, top, bottom } = this.arenaBounds;
+        const r = props.radius;
+        let x, y;
+        const edge = Math.floor(Math.random() * 4);
+        switch (edge) {
+            case 0: x = left  + r + Math.random() * (right - left - r * 2); y = top    + r; break;
+            case 1: x = left  + r + Math.random() * (right - left - r * 2); y = bottom - r; break;
+            case 2: x = left  + r; y = top + r + Math.random() * (bottom - top - r * 2); break;
+            default:x = right - r; y = top + r + Math.random() * (bottom - top - r * 2); break;
+        }
 
         // Head toward center with a small random spread
-        const targetAngle = angle + Math.PI + (Math.random() - 0.5) * 0.4;
+        const angle = Math.atan2(this.cy - y, this.cx - x) + (Math.random() - 0.5) * 0.4;
         const speed = props.speed * speedMult;
 
         const marble = scene.physics.add.image(x, y, `marble_${type}`);
         marble.body.setCircle(props.radius);
-        marble.body.setVelocity(Math.cos(targetAngle) * speed, Math.sin(targetAngle) * speed);
+        marble.body.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
         marble.setDepth(3);
 
         marble.marbleRadius = props.radius;
@@ -187,31 +194,32 @@ export class MarbleSystem {
 
     /** Returns true if the marble bounced off the arena boundary. */
     _bounceOffArena(marble, isPlayer) {
-        const dx = marble.x - this.cx;
-        const dy = marble.y - this.cy;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        const maxDist = CFG.ARENA_RADIUS - marble.marbleRadius;
+        const { left, right, top, bottom } = this.arenaBounds;
+        const r = marble.marbleRadius;
+        const restitution = isPlayer ? 0.95 : 0.82;
+        let bounced = false;
 
-        if (dist > maxDist && dist > 0) {
-            const nx = dx / dist;
-            const ny = dy / dist;
-
-            // Push back inside
-            marble.x = this.cx + nx * maxDist;
-            marble.y = this.cy + ny * maxDist;
-
-            // Reflect velocity along the outward normal
-            const vx = marble.body.velocity.x;
-            const vy = marble.body.velocity.y;
-            const dot = vx * nx + vy * ny;
-            const restitution = isPlayer ? 0.95 : 0.82;
-            marble.body.setVelocity(
-                (vx - 2 * dot * nx) * restitution,
-                (vy - 2 * dot * ny) * restitution
-            );
-            return true;
+        if (marble.x < left + r) {
+            marble.x = left + r;
+            marble.body.setVelocityX(Math.abs(marble.body.velocity.x) * restitution);
+            bounced = true;
+        } else if (marble.x > right - r) {
+            marble.x = right - r;
+            marble.body.setVelocityX(-Math.abs(marble.body.velocity.x) * restitution);
+            bounced = true;
         }
-        return false;
+
+        if (marble.y < top + r) {
+            marble.y = top + r;
+            marble.body.setVelocityY(Math.abs(marble.body.velocity.y) * restitution);
+            bounced = true;
+        } else if (marble.y > bottom - r) {
+            marble.y = bottom - r;
+            marble.body.setVelocityY(-Math.abs(marble.body.velocity.y) * restitution);
+            bounced = true;
+        }
+
+        return bounced;
     }
 
     /** Gently pulls enemy marbles toward the base. */

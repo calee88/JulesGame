@@ -2,9 +2,10 @@
 // SURVIVAL MARBLE MODE — CONFIGURATION
 // ============================================================================
 export const SURVIVAL_CONFIG = {
-    // Arena geometry
-    ARENA_RADIUS: 280,
-    BASE_RADIUS: 55,
+    // Arena geometry (rectangular)
+    ARENA_W: 620,   // half-width from center = 310  (fits inside 720 px screen)
+    ARENA_H: 880,   // half-height from center = 440 (tall portrait play area)
+    BASE_RADIUS: 35,
 
     // Player marble defaults
     PLAYER_MARBLE_RADIUS: 16,
